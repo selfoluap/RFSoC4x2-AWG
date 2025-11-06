@@ -66,7 +66,7 @@ with st.sidebar:
         case "square":
             freq = st.number_input("Frequency (MHz)", min_value=1.0, max_value=2000.0, value=250.0, step=1.0) * 1e6
             duty_cycle = st.slider("Duty Cycle", min_value=0.0, max_value=1.0, value=0.5, step=0.05,
-                                   help="Fraction of period signal is high")
+                                help="Fraction of period signal is high")
             build = st.button("Build waveform", type="primary")
 
         case "custom":
@@ -267,4 +267,4 @@ if build:
         # Calculate and display total error before and after precorrection
         E, E_prime, E_norm, E_prime_norm = calculate_total_error(signal, captured, captured_after_precorrection)
         st.write(f"Total frequency-domain error before precorrection: E = {E:.2f}, normalized E_norm = {E_norm:.6f}")
-        st.write(f"Total frequency-domain error after precorrection: E' = {E_prime:.2f}, normalized E'_norm = {E_prime_norm:.6f}")
+        st.write(f"Total frequency-domain error after precorrection: E' = {E_prime:.2f},lasormalized E'_norm = {E_prime_norm:.6f}")
