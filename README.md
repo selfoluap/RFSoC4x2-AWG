@@ -8,5 +8,4 @@ This repository contains all files related on creating a signal generator using 
 - tcl scripts, bitstream and hardwarehandoffs for usage with Pynq
 
 Experiment notebooks:
-
--
+Each notebook contains an experiment (refer to section Evaluation in my thesis, each subsection corresponds to an experiment)

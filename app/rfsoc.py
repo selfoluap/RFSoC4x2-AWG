@@ -1,12 +1,15 @@
+#here I define my custom classes to handle interfacing with the RFSoC
+
+
 import numpy as np
 # from rfsoc4x2 import oled # type: ignore
 # no oled display usable with xilinx user (needs higher privileges as it seems)
-from rfsoc_mts import mtsOverlay # type: ignore
+from pynq import Overlay  # type: ignore
 
 class RFSocAWG:
     def __init__(self):
         # self.oled = oled.oled_display()
-        self.ol = mtsOverlay("mts.bit")
+        self.ol = Overlay('mts_8GS.bit')
 
     def play_waveform(self, waveform: np.ndarray):
         self.ol.dac_player[:] = waveform.astype(np.int16)

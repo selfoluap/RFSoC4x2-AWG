@@ -1,7 +1,6 @@
 # Imports and overlay loading
 from scipy.signal import sawtooth, square
 import numpy as np
-import matplotlib.pyplot as plt
 from typing import List, Tuple, Dict
 import asyncio
 from awg import plot_time_series_interactive, plot_fft, make_piecewise_ramp, calculate_fft, parse_freqs_mhz, parse_ratios
@@ -13,7 +12,7 @@ import plotly.graph_objects as go # type: ignore
 # RFSoC overlay and OLED display
 from rfsoc4x2 import oled # type: ignore
 from rfsoc_mts import mtsOverlay # type: ignore
-
+#from rfsoc import RFSocAWG
 
 st.set_page_config(page_title="LaserLab: RFSoC AWG", layout="wide")
 st.title("LaserLab: RFSoC AWG")
@@ -34,7 +33,7 @@ _ensure_event_loop_for_streamlit_thread()
 
 # Load overlay once per Streamlit session
 if "ol" not in st.session_state:
-    st.session_state["ol"] = mtsOverlay('mts.bit')
+    st.session_state["ol"] = mtsOverlay('mts_4GS.bit')
 
 ol = st.session_state["ol"]
 oled = st.session_state["oled"]
@@ -65,6 +64,7 @@ with st.sidebar:
 
         case "square":
             freq = st.number_input("Frequency (MHz)", min_value=1.0, max_value=2000.0, value=250.0, step=1.0) * 1e6
+            amp = st.slider("Amplitude (LSB)", min_value=1000, max_value=16383, value=16383)
             duty_cycle = st.slider("Duty Cycle", min_value=0.0, max_value=1.0, value=0.5, step=0.05,
                                 help="Fraction of period signal is high")
             build = st.button("Build waveform", type="primary")
@@ -75,6 +75,7 @@ with st.sidebar:
 
         case _: #default
             freq = st.number_input("Frequency (MHz)", min_value=1.0, max_value=2000.0, value=250.0, step=1.0) * 1e6
+            amp = st.slider("Amplitude (LSB)", min_value=1000, max_value=16383, value=16383)
             build = st.button("Build waveform", type="primary")
             
     # Standalone ADC capture button (does not modify DAC output)
@@ -198,7 +199,7 @@ if build:
         case "sine":
             signal = DAC_AMP * np.sin(2 * np.pi * freq * X_axis)
         case "sawtooth":
-            signal = DAC_AMP * sawtooth(2 * np.pi * freq * X_axis)
+            signal = amp * sawtooth(2 * np.pi * freq * X_axis)
         case "square":
             signal = DAC_AMP * np.sign(np.sin(2 * np.pi * freq * X_axis))
         case "serrodyne":
