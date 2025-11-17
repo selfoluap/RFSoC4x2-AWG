@@ -3,10 +3,6 @@ import numpy as np
 # no oled display usable with xilinx user (needs higher privileges as it seems)
 from rfsoc_mts import mtsOverlay # type: ignore
 
-DAC_SR = 4.0e9  # Hz
-ADC_SR = 4.0e9  # Hz
-DAC_AMP = 16383.0  # 14-bit +16383/-16384 range
-
 class RFSocAWG:
     def __init__(self):
         # self.oled = oled.oled_display()
