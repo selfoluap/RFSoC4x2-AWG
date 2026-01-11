@@ -1,22 +1,75 @@
 # Imports and overlay loading
 from scipy.signal import sawtooth, square
 import numpy as np
-import matplotlib.pyplot as plt
 from typing import List, Tuple, Dict
 import asyncio
-from awg import plot_time_series_interactive, plot_fft, make_piecewise_ramp, calculate_fft, parse_freqs_mhz, parse_ratios
+import os
+from signal_utils import plot_time_series_interactive, plot_fft, calculate_fft, parse_freqs_mhz, parse_ratios
+from signal_generator import calculate_serrodyne
+from config import config
+from tutorial import show_tutorial
 
 #all of these type ignores are only to keep my IDE happy
 import streamlit as st # type: ignore
 import plotly.graph_objects as go # type: ignore
 
-# RFSoC overlay and OLED display
-from rfsoc4x2 import oled # type: ignore
-from rfsoc_mts import mtsOverlay # type: ignore
+# Check for offline mode (set via environment variable or defaults to True for development)
+OFFLINE_MODE = os.environ.get("RFSOC_OFFLINE", "1").lower() in ("1", "true", "yes")
 
+if not OFFLINE_MODE:
+    # RFSoC overlay and OLED display
+    from rfsoc4x2 import oled # type: ignore
+    from rfsoc_mts import mtsOverlay # type: ignore
+    #from rfsoc import RFSocAWG
 
 st.set_page_config(page_title="LaserLab: RFSoC AWG", layout="wide")
 st.title("LaserLab: RFSoC AWG")
+
+if not config.get("tutorial_done", False):
+    show_tutorial()
+
+if OFFLINE_MODE:
+    st.warning("Running in OFFLINE mode - hardware interactions are simulated")
+
+
+# Mock classes for offline mode
+class MockOLED:
+    """Mock OLED display for offline development."""
+    def __init__(self):
+        pass
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
+class MockOverlay:
+    """Mock overlay for offline development."""
+    def __init__(self, bitfile=None):
+        self._buf_len = 65536
+        self._dac_player = np.zeros(self._buf_len, dtype=np.int16)
+        self._adc_capture = np.zeros(self._buf_len, dtype=np.int16)
+    
+    @property
+    def dac_player(self):
+        return self._dac_player
+    
+    @property
+    def adc_capture_chA(self):
+        return self._adc_capture
+    
+    def init_tile_sync(self):
+        pass
+    
+    def verify_clock_tree(self):
+        pass
+    
+    def sync_tiles(self):
+        pass
+    
+    def internal_capture(self, buffer):
+        # Simulate captured signal: return the DAC signal with some noise
+        noise = np.random.normal(0, 100, len(self._dac_player)).astype(np.int16)
+        buffer[0][:] = self._dac_player + noise
+
 
 def _ensure_event_loop_for_streamlit_thread():
     try:
@@ -26,18 +79,21 @@ def _ensure_event_loop_for_streamlit_thread():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-if "oled" not in st.session_state:
-    st.session_state["oled"] = oled.oled_display()
-
-_ensure_event_loop_for_streamlit_thread()
-
-
-# Load overlay once per Streamlit session
-if "ol" not in st.session_state:
-    st.session_state["ol"] = mtsOverlay('mts.bit')
+if OFFLINE_MODE:
+    if "oled" not in st.session_state:
+        st.session_state["oled"] = MockOLED()
+    if "ol" not in st.session_state:
+        st.session_state["ol"] = MockOverlay()
+else:
+    if "oled" not in st.session_state:
+        st.session_state["oled"] = oled.oled_display()
+    _ensure_event_loop_for_streamlit_thread()
+    # Load overlay once per Streamlit session
+    if "ol" not in st.session_state:
+        st.session_state["ol"] = mtsOverlay('mts_4GS.bit')
 
 ol = st.session_state["ol"]
-oled = st.session_state["oled"]
+oled_display = st.session_state["oled"]
 
 # Convenience aliases
 DAC_SR = 4.0e9  # Hz
@@ -65,6 +121,7 @@ with st.sidebar:
 
         case "square":
             freq = st.number_input("Frequency (MHz)", min_value=1.0, max_value=2000.0, value=250.0, step=1.0) * 1e6
+            amp = st.slider("Amplitude (LSB)", min_value=1000, max_value=16383, value=16383)
             duty_cycle = st.slider("Duty Cycle", min_value=0.0, max_value=1.0, value=0.5, step=0.05,
                                 help="Fraction of period signal is high")
             build = st.button("Build waveform", type="primary")
@@ -75,6 +132,7 @@ with st.sidebar:
 
         case _: #default
             freq = st.number_input("Frequency (MHz)", min_value=1.0, max_value=2000.0, value=250.0, step=1.0) * 1e6
+            amp = st.slider("Amplitude (LSB)", min_value=1000, max_value=16383, value=16383)
             build = st.button("Build waveform", type="primary")
             
     # Standalone ADC capture button (does not modify DAC output)
@@ -182,7 +240,7 @@ if capture_only:
         y_label="Amplitude (LSB)",
         height=450,
     )
-    st.plotly_chart(fig_captured, use_container_width=True)
+    st.plotly_chart(fig_captured, width="stretch")
 
     # Apply np.exp with chosen phase scale
     phase_scale = 2*np.pi / (np.max(captured)-np.min(captured))
@@ -190,7 +248,7 @@ if capture_only:
     cos_fz = np.exp(1j * phi)
     fz, mz, _, _ = calculate_fft(cos_fz, ADC_SR)
     fig_fft = plot_fft(fz, mz, title="Spectrum", y_label="Magnitude", name="|FFT{exp}|")
-    st.plotly_chart(fig_fft, use_container_width=True)
+    st.plotly_chart(fig_fft, width="stretch")
 
 
 if build:
@@ -198,7 +256,7 @@ if build:
         case "sine":
             signal = DAC_AMP * np.sin(2 * np.pi * freq * X_axis)
         case "sawtooth":
-            signal = DAC_AMP * sawtooth(2 * np.pi * freq * X_axis)
+            signal = amp * sawtooth(2 * np.pi * freq * X_axis)
         case "square":
             signal = DAC_AMP * np.sign(np.sin(2 * np.pi * freq * X_axis))
         case "serrodyne":
@@ -207,7 +265,7 @@ if build:
             ratios = parse_ratios(ratios_str)
             freqs_hz = parse_freqs_mhz(freqs_str)
             max_points = 65536
-            x, y, N = make_piecewise_ramp(
+            x, y, N = calculate_serrodyne(
                 ratios, freqs_hz, T_s, amp=amp, sr_hz=sr_hz,
                 max_points=int(max_points),
                 continuous_phase=False
@@ -235,7 +293,7 @@ if build:
         y_label="Amplitude (LSB)",
         height=450,
     )
-    st.plotly_chart(fig_time, use_container_width=True)
+    st.plotly_chart(fig_time, width="stretch")
 
     #captured = read_adc()
 
@@ -248,7 +306,7 @@ if build:
         y_label="Amplitude (LSB)",
         height=450,
     )
-    st.plotly_chart(fig_captured, use_container_width=True)
+    st.plotly_chart(fig_captured, width="stretch")
 
     # Apply np.exp with chosen phase scale
     phase_scale = 2*np.pi / (np.max(captured)-np.min(captured))
@@ -256,7 +314,7 @@ if build:
     cos_fz = np.exp(1j * phi)
     fz, mz, _, _ = calculate_fft(cos_fz, ADC_SR)
     fig_fft = plot_fft(fz, mz, title="Spectrum", y_label="Magnitude", name="|FFT{exp}|")
-    st.plotly_chart(fig_fft, use_container_width=True)
+    st.plotly_chart(fig_fft, width="stretch")
 
     if enable_precorrection:
         # captured_after_precorrection should have been returned by output_waveform,
