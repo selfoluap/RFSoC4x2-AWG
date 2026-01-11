@@ -1,0 +1,13 @@
+sudo cp /home/xilinx/paulo/RFSoC4x2-AWG/overlays/mts_8GS.bit \
+        /usr/local/share/pynq-venv/lib/python3.10/site-packages/rfsoc_mts/mts_8GS.bit
+
+sudo cp /home/xilinx/paulo/RFSoC4x2-AWG/overlays/mts_8GS.hwh \
+        /usr/local/share/pynq-venv/lib/python3.10/site-packages/rfsoc_mts/mts_8GS.hwh
+
+
+sudo cp /usr/local/share/pynq-venv/lib/python3.10/site-packages/rfsoc_mts/mts.hwh \
+        /home/xilinx/paulo/RFSoC4x2-AWG/overlays/mts_4GS.hwh 
+
+sudo cp /usr/local/share/pynq-venv/lib/python3.10/site-packages/rfsoc_mts/mts.bit \
+    /home/xilinx/paulo/RFSoC4x2-AWG/overlays/mts_4GS.bit
+        
