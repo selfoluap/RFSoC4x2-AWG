@@ -1,5 +1,9 @@
 "fastapi[standard]"
+uvicorn
 streamlit
 numpy
 plotly
 scipy
+requests
+pydantic
+python-dotenv
