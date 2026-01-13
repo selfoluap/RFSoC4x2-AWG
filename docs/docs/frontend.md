@@ -4,7 +4,7 @@ The Streamlit frontend provides a web-based graphical user interface for researc
 
 ## Overview
 
-![RFSoC Board](images/rfsoc%20board.png)
+![UI](images/UI.png)
 
 ## Architecture
 
