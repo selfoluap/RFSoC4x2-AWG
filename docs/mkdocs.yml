@@ -1,3 +1,21 @@
-site_name: My Docs
+site_name: RFSoC-AWG Serrodyne Suite
+site_description: Documentation for high-frequency serrodyne modulation using Xilinx RFSoC.
 theme:
   name: readthedocs
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - System Setup:
+      - Installation: installation.md
+      - Networking: networking.md
+      - Remote Access: tailscale.md
+  - Architecture:
+      - Streamlit Frontend: frontend.md
+      - Jupyter Environment: jupyter.md
+      - Vivado Overlay: vivado.md
+  - Deployment:
+      - Systemd Services: systemd.md
