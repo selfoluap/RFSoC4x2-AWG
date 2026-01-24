@@ -25,7 +25,7 @@ from signal_generator import calculate_serrodyne
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-OFFLINE_MODE = os.environ.get("RFSOC_OFFLINE", "1").lower() in ("1", "true", "yes")
+OFFLINE_MODE = os.environ.get("RFSOC_OFFLINE", "0").lower() in ("1", "true", "yes")
 
 # Hardware constants
 DAC_SR = 4.0e9  # Hz
@@ -109,11 +109,10 @@ class HardwareState:
             self._overlay = MockOverlay()
             self._oled = MockOLED()
         else:
-            # Import real hardware modules only when needed
             from rfsoc4x2 import oled
             from rfsoc_mts import mtsOverlay
             self._oled = oled.oled_display()
-            self._overlay = mtsOverlay('mts_4GS.bit')
+            self._overlay = mtsOverlay('/home/xilinx/paulo//RFSoC4x2-AWG/overlays/mts_8GS/mts_8GS.bit')
 
     @property
     def overlay(self):
