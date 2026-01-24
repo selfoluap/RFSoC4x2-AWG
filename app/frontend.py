@@ -259,10 +259,7 @@ backend_connected = check_backend_connection()
 if not backend_connected:
     st.error(
         f"⚠️ Cannot connect to backend at {BACKEND_URL}. "
-        "Please ensure the backend server is running:\n\n"
-        "```bash\n"
-        "cd app && uvicorn backend:app --reload --host 0.0.0.0 --port 8000\n"
-        "```"
+        "Please ensure the backend server is running and reload the page."
     )
     st.stop()
 
@@ -282,7 +279,7 @@ except Exception:
     ADC_SR = 4.0e9  # fallback
 
 # Waveform options
-waveform_options = ["serrodyne", "sine", "sawtooth", "square", "custom"]
+waveform_options = ["serrodyne", "static", "sine", "sawtooth", "square", "custom"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar Controls
@@ -333,6 +330,9 @@ with st.sidebar:
             )
             st.info("Sample rate: 4 GS/s")
             build = st.button("Build waveform", type="primary")
+
+        case "static":
+            build = st.button("Output static DAC levels", type="primary")
 
         case "square":
             freq = st.number_input(
@@ -394,7 +394,7 @@ with st.sidebar:
 
 # Handle capture-only button
 if capture_only:
-    with st.spinner("Capturing ADC samples..."):
+    with st.spinner("Capturing ADC samples and calculating FFT..."):
         try:
             result = api.capture_adc()
 
@@ -431,7 +431,7 @@ if capture_only:
 
 # Handle build waveform button
 if build:
-    with st.spinner("Generating and outputting waveform..."):
+    with st.spinner("Generating and outputting waveform, calculating FFT..."):
         try:
             match waveform_type:
                 case "serrodyne":
@@ -443,7 +443,7 @@ if build:
                         precorrection=enable_precorrection
                     )
 
-                case "sine" | "sawtooth" | "square":
+                case "static" | "sine" | "sawtooth" | "square":
                     result = api.generate_simple_waveform(
                         waveform_type=waveform_type,
                         freq_mhz=freq,

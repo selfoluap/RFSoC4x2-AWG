@@ -2,7 +2,7 @@
 FastAPI Backend for RFSoC AWG Control
 
 This module provides REST API endpoints for hardware control and signal processing.
-All functions return literals or dict objects - no Streamlit dependencies.
+All functions return literals or dict objects.
 """
 
 import os
@@ -112,7 +112,7 @@ class HardwareState:
             from rfsoc4x2 import oled
             from rfsoc_mts import mtsOverlay
             self._oled = oled.oled_display()
-            self._overlay = mtsOverlay('/home/xilinx/paulo//RFSoC4x2-AWG/overlays/mts_8GS/mts_8GS.bit')
+            self._overlay = mtsOverlay('/home/xilinx/paulo/RFSoC4x2-AWG/overlays/mts_4GS/mts_4GS.bit')
 
     @property
     def overlay(self):
@@ -354,7 +354,9 @@ def generate_simple_waveform(
     """Generate simple waveforms (sine, sawtooth, square)."""
     x_axis = hardware.x_axis
 
-    if waveform_type == "sine":
+    if waveform_type == "static":
+        return np.zeros_like(x_axis)
+    elif waveform_type == "sine":
         return amp * np.sin(2 * np.pi * freq_hz * x_axis)
     elif waveform_type == "sawtooth":
         return amp * sawtooth(2 * np.pi * freq_hz * x_axis)
