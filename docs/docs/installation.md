@@ -8,8 +8,6 @@ Follow these steps to set up the project.
 - MicroSD card (min 16GB) with PYNQ image
 - Internet access (via Raspberry Pi bridge if necessary)
 
-![RFSoc](images/rfsoc%20board.png)
-
 ## Step 1: Prepare the PYNQ Image
 
 The RFSoC 4x2 must be flashed with a compatible PYNQ SD card image (version 3.0.1 or later).

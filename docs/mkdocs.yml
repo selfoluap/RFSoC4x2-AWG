@@ -13,9 +13,13 @@ nav:
       - Installation: installation.md
       - Networking: networking.md
       - Remote Access: tailscale.md
+  - Theory:
+      - Serrodyne Modulation: serrodyne.md
   - Architecture:
       - Streamlit Frontend: frontend.md
       - Jupyter Environment: jupyter.md
       - Vivado Overlay: vivado.md
   - Deployment:
       - Systemd Services: systemd.md
+  - Additional Resources:
+      - Board Info: board.md

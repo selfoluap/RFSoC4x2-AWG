@@ -2,14 +2,18 @@
 
 Instructions for developers who need to alter the hardware logic or RF parameters of the FPGA design.
 
-## Overview
+## Links
+
+https://www.xilinx.com/support/download.html for downloading Vivado
 
 ## Prerequisites
 
-- Vivado Design Suite (version matching the PYNQ image, typically 2022.1 or 2022.2)
+- Vivado Design Suite 2022.1
 - RFSoC 4x2 Board Files installed in Vivado
 
-### 3. Modifying the Block Design
+### Simplified Block Design
+
+### Modifying the Block Design
 
 - tcl script to build project from scratch
 - TODO: link to guide
