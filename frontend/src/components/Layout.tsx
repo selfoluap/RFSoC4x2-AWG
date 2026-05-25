@@ -27,14 +27,7 @@ export function Layout() {
     []
   );
 
-  const modeLabel =
-    status?.offline_mode ?? constants?.OFFLINE_MODE
-      ? "offline mock"
-      : status || constants
-      ? "hardware link"
-      : null;
   const dacRate = constants?.DAC_SR ?? status?.dac_sr ?? null;
-  const adcRate = constants?.ADC_SR ?? status?.adc_sr ?? null;
   const bufferLength = constants?.BUF_LEN ?? status?.buf_len ?? null;
   const amplitudeLimit = constants?.DAC_AMP ?? null;
   const hardwareLabel = status
@@ -44,8 +37,7 @@ export function Layout() {
     : null;
   const sessionFacts = [
     dacRate ? `${(dacRate / 1e9).toFixed(2)} GSPS DAC` : null,
-    adcRate ? `${(adcRate / 1e9).toFixed(2)} GSPS ADC` : null,
-    modeLabel,
+    status || constants ? "hardware link" : null,
     hardwareLabel,
     bufferLength ? `buffer ${bufferLength.toLocaleString()}` : null,
     amplitudeLimit ? `amp ${amplitudeLimit.toLocaleString()}` : null,
@@ -74,13 +66,13 @@ export function Layout() {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <p className="subtitle auth-copy">Offline development mode</p>
+          <p className="subtitle auth-copy">RFSoC hardware control</p>
           <div className="auth-meta-grid">
             <div className="meta-chip">
               <code>{api.backendUrl}</code>
             </div>
             <div className="meta-chip">
-              <strong>mock hardware</strong>
+              <strong>overlay controller</strong>
             </div>
           </div>
           <form className="auth-form" onSubmit={handleLogin}>

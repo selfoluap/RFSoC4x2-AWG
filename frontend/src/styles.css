@@ -19,7 +19,6 @@
   --font-display: "Fraunces", Georgia, serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
   --plot-signal: #61d4b3;
-  --plot-capture: #9dc1ff;
   --plot-spectrum: #f0c36e;
   --plot-axis: rgba(237, 242, 247, 0.16);
   --plot-grid: rgba(237, 242, 247, 0.08);

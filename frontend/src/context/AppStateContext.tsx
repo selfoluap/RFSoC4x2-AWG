@@ -1,20 +1,18 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { api } from "../api";
-import type { ConstantsResponse, ErrorMetrics, FFTResponse, StatusResponse, WaveformResponse } from "../types";
+import type { ConstantsResponse, FFTResponse, StatusResponse, WaveformResponse } from "../types";
 
 interface AppState {
   status: StatusResponse | null;
   constants: ConstantsResponse | null;
   waveform: WaveformResponse | null;
   fft: FFTResponse | null;
-  metrics: ErrorMetrics | null;
   loading: boolean;
   error: string | null;
   setStatus: (v: StatusResponse | null) => void;
   setConstants: (v: ConstantsResponse | null) => void;
   setWaveform: (v: WaveformResponse | null) => void;
   setFft: (v: FFTResponse | null) => void;
-  setMetrics: (v: ErrorMetrics | null) => void;
   loadBackendSummary: () => Promise<void>;
   run: (label: string, fn: () => Promise<void>) => Promise<void>;
   runWaveformGeneration: (label: string, generate: () => Promise<WaveformResponse>) => Promise<void>;
@@ -27,7 +25,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [constants, setConstants] = useState<ConstantsResponse | null>(null);
   const [waveform, setWaveform] = useState<WaveformResponse | null>(null);
   const [fft, setFft] = useState<FFTResponse | null>(null);
-  const [metrics, setMetrics] = useState<ErrorMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,19 +88,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       constants,
       waveform,
       fft,
-      metrics,
       loading,
       error,
       setStatus,
       setConstants,
       setWaveform,
       setFft,
-      setMetrics,
       loadBackendSummary,
       run,
       runWaveformGeneration
     }),
-    [status, constants, waveform, fft, metrics, loading, error, loadBackendSummary, run, runWaveformGeneration]
+    [status, constants, waveform, fft, loading, error, loadBackendSummary, run, runWaveformGeneration]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

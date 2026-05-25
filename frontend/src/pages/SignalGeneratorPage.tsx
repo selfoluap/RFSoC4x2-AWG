@@ -14,14 +14,12 @@ export function SignalGeneratorPage() {
     freq_mhz: 250,
     amp: 16383,
     duty_cycle: 0.5,
-    precorrection: false,
   });
   const [serrodyneForm, setSerrodyneForm] = useState<SerrodyneForm>({
     ratios_str: "1:5:3",
     freqs_str: "-1330,0,840",
     T_total_us: 1,
     amp: 16383,
-    precorrection: false,
   });
   const [simpleScale, setSimpleScale] = useState(1);
   const [serrodyneScale, setSerrodyneScale] = useState(1);
@@ -29,7 +27,6 @@ export function SignalGeneratorPage() {
   const isSerrodyne = generatorType === "serrodyne";
   const maxAmplitude = constants?.DAC_AMP ?? 16383;
   const activeScale = isSerrodyne ? serrodyneScale : simpleScale;
-  const activePrecorrection = isSerrodyne ? serrodyneForm.precorrection : simpleForm.precorrection;
   const activeAmplitude = Math.round(maxAmplitude * activeScale);
   const profileLabel = isSerrodyne
     ? `ratios ${serrodyneForm.ratios_str}`
@@ -116,14 +113,6 @@ export function SignalGeneratorPage() {
                       }}
                     />
                   </label>
-                  <label className="toggle-field">
-                    <span className="field-label">Precorrection</span>
-                    <input
-                      type="checkbox"
-                      checked={serrodyneForm.precorrection}
-                      onChange={(e) => setSerrodyneForm({ ...serrodyneForm, precorrection: e.target.checked })}
-                    />
-                  </label>
                 </>
               ) : (
                 <>
@@ -161,14 +150,6 @@ export function SignalGeneratorPage() {
                       onChange={(e) => setSimpleForm({ ...simpleForm, duty_cycle: Number(e.target.value) })}
                     />
                   </label>
-                  <label className="toggle-field">
-                    <span className="field-label">Precorrection</span>
-                    <input
-                      type="checkbox"
-                      checked={simpleForm.precorrection}
-                      onChange={(e) => setSimpleForm({ ...simpleForm, precorrection: e.target.checked })}
-                    />
-                  </label>
                 </>
               )}
             </div>
@@ -183,10 +164,6 @@ export function SignalGeneratorPage() {
               <div className="readout-row">
                 <span>amplitude</span>
                 <strong>{activeAmplitude}</strong>
-              </div>
-              <div className="readout-row">
-                <span>precorrection</span>
-                <strong>{activePrecorrection ? "enabled" : "disabled"}</strong>
               </div>
             </div>
             <div className="button-stack">

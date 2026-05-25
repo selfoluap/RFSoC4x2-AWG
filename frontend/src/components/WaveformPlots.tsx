@@ -24,30 +24,6 @@ export function WaveformPlots() {
                 tone="signal"
               />
             </article>
-            {waveform.captured && (
-              <article className="plot-card">
-                <PlotlyChart
-                  title="Captured signal"
-                  x={waveform.x_axis}
-                  y={waveform.captured}
-                  xLabel="Time (s)"
-                  yLabel="Amplitude"
-                  tone="capture"
-                />
-              </article>
-            )}
-            {waveform.captured_after_precorrection && (
-              <article className="plot-card">
-                <PlotlyChart
-                  title="Captured after precorrection"
-                  x={waveform.x_axis}
-                  y={waveform.captured_after_precorrection}
-                  xLabel="Time (s)"
-                  yLabel="Amplitude"
-                  tone="capture"
-                />
-              </article>
-            )}
           </div>
         </section>
       )}

@@ -1,0 +1,8 @@
+fastapi[standard]
+uvicorn
+numpy
+plotly
+scipy
+requests
+pydantic
+python-dotenv

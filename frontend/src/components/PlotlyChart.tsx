@@ -7,7 +7,7 @@ interface PlotlyChartProps {
   y: number[];
   xLabel: string;
   yLabel: string;
-  tone?: "signal" | "capture" | "spectrum";
+  tone?: "signal" | "spectrum";
 }
 
 export function PlotlyChart({
@@ -26,7 +26,6 @@ export function PlotlyChart({
     const styles = getComputedStyle(document.documentElement);
     const lineColorMap = {
       signal: styles.getPropertyValue("--plot-signal").trim() || "#38d27d",
-      capture: styles.getPropertyValue("--plot-capture").trim() || "#c7e36f",
       spectrum: styles.getPropertyValue("--plot-spectrum").trim() || "#f0b44d",
     };
     const axisColor = styles.getPropertyValue("--plot-axis").trim() || "rgba(255,255,255,0.12)";

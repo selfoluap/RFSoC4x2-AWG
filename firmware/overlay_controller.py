@@ -104,7 +104,6 @@ class OverlayController(Overlay):
         self.bitfile_path = str(Path(bitfile).expanduser())
         super().__init__(self.bitfile_path, download=download, **kwargs)
 
-        self.rfdc = self.usp_rf_data_converter_1
         self.dac0 = DacPlayer(
             overlay=self,
             name="dac0",

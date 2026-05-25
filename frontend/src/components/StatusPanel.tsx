@@ -1,20 +1,17 @@
 import { useAppState } from "../context/AppStateContext";
 
 export function StatusPanel() {
-  const { status, constants, metrics } = useAppState();
+  const { status, constants } = useAppState();
   const snapshot = {
     ...(status ? { status } : {}),
     ...(constants ? { constants } : {}),
-    ...(metrics ? { metrics } : {}),
   };
 
   const statusItems = status
     ? [
-        ["Backend mode", status.offline_mode ? "offline mock" : "hardware link"],
         ["Hardware init", status.hardware_initialized ? "ready" : "not initialized"],
         ["Buffer length", status.buf_len.toLocaleString()],
         ["DAC sample rate", `${(status.dac_sr / 1e9).toFixed(2)} GSPS`],
-        ["ADC sample rate", `${(status.adc_sr / 1e9).toFixed(2)} GSPS`],
       ]
     : [];
 
@@ -22,16 +19,6 @@ export function StatusPanel() {
     ? [
         ["DAC_AMP", constants.DAC_AMP.toLocaleString()],
         ["BUF_LEN", constants.BUF_LEN.toLocaleString()],
-        ["Offline default", constants.OFFLINE_MODE ? "enabled" : "disabled"],
-      ]
-    : [];
-
-  const metricItems = metrics
-    ? [
-        ["E", metrics.E.toExponential(3)],
-        ["E'", metrics.E_prime.toExponential(3)],
-        ["E norm", metrics.E_norm.toExponential(3)],
-        ["E' norm", metrics.E_prime_norm.toExponential(3)],
       ]
     : [];
 
@@ -42,7 +29,7 @@ export function StatusPanel() {
         <h2>Telemetry</h2>
       </div>
 
-      {!status && !constants && !metrics && (
+      {!status && !constants && (
         <div className="empty-state">
           No telemetry available.
         </div>
@@ -68,20 +55,6 @@ export function StatusPanel() {
             <p className="command-kicker">constants</p>
             <div className="readout-list">
               {constantItems.map(([label, value]) => (
-                <div key={label} className="readout-row">
-                  <span>{label}</span>
-                  <strong>{value}</strong>
-                </div>
-              ))}
-            </div>
-          </article>
-        )}
-
-        {metricItems.length > 0 && (
-          <article className="telemetry-card">
-            <p className="command-kicker">metrics</p>
-            <div className="readout-list">
-              {metricItems.map(([label, value]) => (
                 <div key={label} className="readout-row">
                   <span>{label}</span>
                   <strong>{value}</strong>

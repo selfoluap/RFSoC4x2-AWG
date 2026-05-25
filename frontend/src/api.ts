@@ -1,6 +1,5 @@
 import type {
   ConstantsResponse,
-  ErrorMetrics,
   FFTResponse,
   SerrodyneForm,
   SimpleForm,
@@ -27,12 +26,9 @@ export const api = {
   backendUrl: BACKEND_URL,
   getStatus: () => request<StatusResponse>("/status"),
   getConstants: () => request<ConstantsResponse>("/constants"),
-  captureADC: () => request<WaveformResponse>("/capture"),
-  getCaptureFft: () => request<FFTResponse>("/capture/fft"),
   getWaveformFft: () => request<FFTResponse>("/waveform/fft"),
-  calculateErrorMetrics: () => request<ErrorMetrics>("/error_metrics", { method: "POST" }),
   generateSerrodyne: (payload: SerrodyneForm) =>
-    request<WaveformResponse>(`/waveform/serrodyne?precorrection=${payload.precorrection}`, {
+    request<WaveformResponse>("/waveform/serrodyne", {
       method: "POST",
       body: JSON.stringify({
         ratios_str: payload.ratios_str,
@@ -42,7 +38,7 @@ export const api = {
       })
     }),
   generateSimple: (payload: SimpleForm) =>
-    request<WaveformResponse>(`/waveform/simple?precorrection=${payload.precorrection}`, {
+    request<WaveformResponse>("/waveform/simple", {
       method: "POST",
       body: JSON.stringify({
         waveform_type: payload.waveform_type,
