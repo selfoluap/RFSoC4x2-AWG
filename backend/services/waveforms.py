@@ -49,16 +49,18 @@ def generate_simple_waveform(
     buf_len: int,
     duty_cycle: float = 0.5,
 ) -> np.ndarray:
-    if waveform_type == "static":
-        return np.zeros(int(buf_len), dtype=float)
-    if waveform_type == "sine":
-        return signals.sine(freq_hz, dac_sr, buf_len, amplitude=amp)
-    if waveform_type == "cos":
-        return signals.cosine(freq_hz, dac_sr, buf_len, amplitude=amp)
-    if waveform_type == "sawtooth":
-        return signals.sawtooth(freq_hz, dac_sr, buf_len, amplitude=amp)
-    if waveform_type == "square":
-        if not (0.0 <= duty_cycle <= 1.0):
-            raise ValueError("duty_cycle must be between 0 and 1")
-        return signals.square(freq_hz, dac_sr, buf_len, amplitude=amp, duty=duty_cycle)
-    raise ValueError(f"Unsupported waveform type: {waveform_type}")
+    match waveform_type:
+        case "static":
+            return np.zeros(int(buf_len), dtype=float)
+        case "sine":
+            return signals.sine(freq_hz, dac_sr, buf_len, amplitude=amp)
+        case "cos":
+            return signals.cosine(freq_hz, dac_sr, buf_len, amplitude=amp)
+        case "sawtooth":
+            return signals.sawtooth(freq_hz, dac_sr, buf_len, amplitude=amp)
+        case "square":
+            if not (0.0 <= duty_cycle <= 1.0):
+                raise ValueError("duty_cycle must be between 0 and 1")
+            return signals.square(freq_hz, dac_sr, buf_len, amplitude=amp, duty=duty_cycle)
+        case _:
+            raise ValueError(f"Unsupported waveform type: {waveform_type}")
