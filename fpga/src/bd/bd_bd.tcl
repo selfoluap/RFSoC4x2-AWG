@@ -608,14 +608,10 @@ proc create_hier_cell_clocktree { parentCell nameHier } {
 
   # Create pins
   create_bd_pin -dir I -from 0 -to 0 -type clk PL_CLK
-  create_bd_pin -dir I -from 0 -to 0 PL_SYSREF
-  create_bd_pin -dir O -from 0 -to 0 UserSYSREF
-  create_bd_pin -dir O -from 0 -to 0 -type rst bus_struct_reset
   create_bd_pin -dir O -type clk clkRF
   create_bd_pin -dir O -type clk clkRFdiv2
   create_bd_pin -dir O -from 0 -to 0 -type rst egress_aresetn
   create_bd_pin -dir I -type rst ext_reset_in
-  create_bd_pin -dir O -from 0 -to 0 -type rst ingress_aresetn
   create_bd_pin -dir O -type intr interrupt
   create_bd_pin -dir I -type clk s_axi_aclk
   create_bd_pin -dir O -from 0 -to 0 -type rst s_axi_aresetn
@@ -681,34 +677,18 @@ proc create_hier_cell_clocktree { parentCell nameHier } {
   # Create instance: RFegressReset, and set properties
   set RFegressReset [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 RFegressReset ]
 
-  # Create instance: RFingressReset, and set properties
-  set RFingressReset [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 RFingressReset ]
-
-  # Create instance: synchronizeSYSREF, and set properties
-  set synchronizeSYSREF [ create_bd_cell -type ip -vlnv xilinx.com:ip:xpm_cdc_gen:1.0 synchronizeSYSREF ]
-  set_property -dict [ list \
-   CONFIG.CDC_TYPE {xpm_cdc_single} \
-   CONFIG.DEST_SYNC_FF {2} \
-   CONFIG.INIT_SYNC_FF {true} \
-   CONFIG.WIDTH {1} \
- ] $synchronizeSYSREF
-
   # Create interface connections
   connect_bd_intf_net -intf_net control_interconnect_M07_AXI [get_bd_intf_pins s_axi_lite] [get_bd_intf_pins clkwiz/s_axi_lite]
 
   # Create port connections
   connect_bd_net -net BUFG_I_0_1 [get_bd_pins PL_CLK] [get_bd_pins BUFG_PL_CLK/BUFG_I]
   connect_bd_net -net clkwiz_interrupt [get_bd_pins interrupt] [get_bd_pins clkwiz/interrupt]
-  connect_bd_net -net PSreset_control_bus_struct_reset [get_bd_pins bus_struct_reset] [get_bd_pins PSreset_control/bus_struct_reset]
   connect_bd_net -net RFegressReset_peripheral_aresetn [get_bd_pins egress_aresetn] [get_bd_pins RFegressReset/peripheral_aresetn]
-  connect_bd_net -net RFingressReset_peripheral_aresetn [get_bd_pins ingress_aresetn] [get_bd_pins RFingressReset/peripheral_aresetn]
-  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clkRF] [get_bd_pins clkwiz/clk_out1] [get_bd_pins RFingressReset/slowest_sync_clk] [get_bd_pins synchronizeSYSREF/dest_clk]
-  connect_bd_net -net clk_wiz_0_locked [get_bd_pins clkwiz/locked] [get_bd_pins RFegressReset/dcm_locked] [get_bd_pins RFingressReset/dcm_locked]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clkRF] [get_bd_pins clkwiz/clk_out1]
+  connect_bd_net -net clk_wiz_0_locked [get_bd_pins clkwiz/locked] [get_bd_pins RFegressReset/dcm_locked]
   connect_bd_net -net clk_wiz_adc0_clk_out2 [get_bd_pins clkRFdiv2] [get_bd_pins clkwiz/clk_out2] [get_bd_pins RFegressReset/slowest_sync_clk]
-  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins s_axi_aresetn] [get_bd_pins clkwiz/s_axi_aresetn] [get_bd_pins PSreset_control/peripheral_aresetn] [get_bd_pins RFingressReset/ext_reset_in]
-  connect_bd_net -net src_in_0_1 [get_bd_pins PL_SYSREF] [get_bd_pins synchronizeSYSREF/src_in]
-  connect_bd_net -net synchronizeSYSREF_dest_out [get_bd_pins UserSYSREF] [get_bd_pins synchronizeSYSREF/dest_out]
-  connect_bd_net -net util_ds_buf_0_BUFG_O [get_bd_pins BUFG_PL_CLK/BUFG_O] [get_bd_pins clkwiz/clk_in1] [get_bd_pins synchronizeSYSREF/src_clk]
+  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins s_axi_aresetn] [get_bd_pins clkwiz/s_axi_aresetn] [get_bd_pins PSreset_control/peripheral_aresetn]
+  connect_bd_net -net util_ds_buf_0_BUFG_O [get_bd_pins BUFG_PL_CLK/BUFG_O] [get_bd_pins clkwiz/clk_in1]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins s_axi_aclk] [get_bd_pins clkwiz/ref_clk] [get_bd_pins clkwiz/s_axi_aclk] [get_bd_pins PSreset_control/slowest_sync_clk]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins ext_reset_in] [get_bd_pins PSreset_control/ext_reset_in] [get_bd_pins RFegressReset/ext_reset_in]
 
@@ -750,8 +730,6 @@ proc create_root_design { parentCell } {
 
 
   # Create interface ports
-  set adc2_clk [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_clock_rtl:1.0 adc2_clk ]
-
   set dac230_clk [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_clock_rtl:1.0 dac230_clk ]
 
   set dac2_clk [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_clock_rtl:1.0 dac2_clk ]
@@ -761,26 +739,13 @@ proc create_root_design { parentCell } {
 
   set sysref_in [ create_bd_intf_port -mode Slave -vlnv xilinx.com:display_usp_rf_data_converter:diff_pins_rtl:1.0 sysref_in ]
 
-  set vin0_01 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vin0_01 ]
-
-  set vin0_23 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vin0_23 ]
-
-  set vin1_01 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vin1_01 ]
-
-  set vin2_01 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vin2_01 ]
-
-  set vin2_23 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vin2_23 ]
-
   set vout00 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vout00 ]
-
-  set vout10 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vout10 ]
 
   set vout20 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:diff_analog_io_rtl:1.0 vout20 ]
 
 
   # Create ports
   set PL_CLK [ create_bd_port -dir I -from 0 -to 0 -type clk -freq_hz 122880000 PL_CLK ]
-  set PL_SYSREF [ create_bd_port -dir I -from 0 -to 0 PL_SYSREF ]
 
   # Create instance: clocktree
   create_hier_cell_clocktree [current_bd_instance .] clocktree
@@ -788,7 +753,7 @@ proc create_root_design { parentCell } {
   # Create instance: control_interconnect, and set properties
   set control_interconnect [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_interconnect ]
   set_property -dict [ list \
-   CONFIG.NUM_MI {7} \
+   CONFIG.NUM_MI {5} \
    CONFIG.S00_HAS_DATA_FIFO {0} \
    CONFIG.S00_HAS_REGSLICE {3} \
    CONFIG.STRATEGY {1} \
@@ -811,13 +776,7 @@ proc create_root_design { parentCell } {
    CONFIG.M00_HAS_REGSLICE {3} \
    CONFIG.M01_HAS_DATA_FIFO {0} \
    CONFIG.M01_HAS_REGSLICE {3} \
-   CONFIG.M02_HAS_DATA_FIFO {0} \
-   CONFIG.M02_HAS_REGSLICE {3} \
-   CONFIG.M03_HAS_DATA_FIFO {0} \
-   CONFIG.M03_HAS_REGSLICE {3} \
-   CONFIG.M04_HAS_DATA_FIFO {0} \
-   CONFIG.M04_HAS_REGSLICE {3} \
-   CONFIG.NUM_MI {6} \
+   CONFIG.NUM_MI {2} \
    CONFIG.S00_HAS_DATA_FIFO {0} \
    CONFIG.S00_HAS_REGSLICE {3} \
    CONFIG.STRATEGY {1} \
@@ -853,7 +812,7 @@ proc create_root_design { parentCell } {
   set_property -dict [ list \
    CONFIG.ADC0_Clock_Dist {0} \
    CONFIG.ADC0_Clock_Source {2} \
-   CONFIG.ADC0_Enable {1} \
+   CONFIG.ADC0_Enable {0} \
    CONFIG.ADC0_Fabric_Freq {500.000} \
    CONFIG.ADC0_Multi_Tile_Sync {true} \
    CONFIG.ADC0_Outclk_Freq {250.000} \
@@ -862,7 +821,7 @@ proc create_root_design { parentCell } {
    CONFIG.ADC0_Sampling_Rate {4.0} \
    CONFIG.ADC1_Clock_Dist {0} \
    CONFIG.ADC1_Clock_Source {2} \
-   CONFIG.ADC1_Enable {1} \
+   CONFIG.ADC1_Enable {0} \
    CONFIG.ADC1_Fabric_Freq {500.000} \
    CONFIG.ADC1_Multi_Tile_Sync {true} \
    CONFIG.ADC1_Outclk_Freq {250.000} \
@@ -871,7 +830,7 @@ proc create_root_design { parentCell } {
    CONFIG.ADC1_Sampling_Rate {4.0} \
    CONFIG.ADC2_Clock_Dist {2} \
    CONFIG.ADC2_Clock_Source {2} \
-   CONFIG.ADC2_Enable {1} \
+   CONFIG.ADC2_Enable {0} \
    CONFIG.ADC2_Fabric_Freq {500.000} \
    CONFIG.ADC2_Multi_Tile_Sync {true} \
    CONFIG.ADC2_Outclk_Freq {250.000} \
@@ -879,7 +838,7 @@ proc create_root_design { parentCell } {
    CONFIG.ADC2_Refclk_Freq {500.000} \
    CONFIG.ADC2_Sampling_Rate {4.0} \
    CONFIG.ADC3_Clock_Source {2} \
-   CONFIG.ADC3_Enable {1} \
+   CONFIG.ADC3_Enable {0} \
    CONFIG.ADC3_Fabric_Freq {500.000} \
    CONFIG.ADC3_Outclk_Freq {250.000} \
    CONFIG.ADC3_PLL_Enable {false} \
@@ -960,20 +919,20 @@ proc create_root_design { parentCell } {
    CONFIG.ADC_RESERVED_1_30 {false} \
    CONFIG.ADC_RESERVED_1_32 {false} \
    CONFIG.ADC_RTS {false} \
-   CONFIG.ADC_Slice00_Enable {true} \
-   CONFIG.ADC_Slice01_Enable {true} \
-   CONFIG.ADC_Slice02_Enable {true} \
-   CONFIG.ADC_Slice03_Enable {true} \
-   CONFIG.ADC_Slice10_Enable {true} \
-   CONFIG.ADC_Slice11_Enable {true} \
+   CONFIG.ADC_Slice00_Enable {false} \
+   CONFIG.ADC_Slice01_Enable {false} \
+   CONFIG.ADC_Slice02_Enable {false} \
+   CONFIG.ADC_Slice03_Enable {false} \
+   CONFIG.ADC_Slice10_Enable {false} \
+   CONFIG.ADC_Slice11_Enable {false} \
    CONFIG.ADC_Slice12_Enable {false} \
    CONFIG.ADC_Slice13_Enable {false} \
-   CONFIG.ADC_Slice20_Enable {true} \
-   CONFIG.ADC_Slice21_Enable {true} \
-   CONFIG.ADC_Slice22_Enable {true} \
-   CONFIG.ADC_Slice23_Enable {true} \
-   CONFIG.ADC_Slice30_Enable {true} \
-   CONFIG.ADC_Slice31_Enable {true} \
+   CONFIG.ADC_Slice20_Enable {false} \
+   CONFIG.ADC_Slice21_Enable {false} \
+   CONFIG.ADC_Slice22_Enable {false} \
+   CONFIG.ADC_Slice23_Enable {false} \
+   CONFIG.ADC_Slice30_Enable {false} \
+   CONFIG.ADC_Slice31_Enable {false} \
    CONFIG.Axiclk_Freq {100.0} \
    CONFIG.DAC0_Clock_Dist {0} \
    CONFIG.DAC0_Clock_Source {4} \
@@ -2656,48 +2615,38 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
  ] $zynq_ultra_ps_e_0
 
   # Create interface connections
-  connect_bd_intf_net -intf_net S_AXI1_1 [get_bd_intf_pins control_interconnect/M04_AXI] [get_bd_intf_pins gpio_control/S_AXI1]
-  connect_bd_intf_net -intf_net S_AXI_3 [get_bd_intf_pins control_interconnect/M03_AXI] [get_bd_intf_pins gpio_control/S_AXI]
-  connect_bd_intf_net -intf_net adc2_clk_0_1 [get_bd_intf_ports adc2_clk] [get_bd_intf_pins usp_rf_data_converter_1/adc2_clk]
+  connect_bd_intf_net -intf_net S_AXI1_1 [get_bd_intf_pins control_interconnect/M03_AXI] [get_bd_intf_pins gpio_control/S_AXI1]
+  connect_bd_intf_net -intf_net S_AXI_3 [get_bd_intf_pins control_interconnect/M02_AXI] [get_bd_intf_pins gpio_control/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins hier_dac_play/S_AXI] [get_bd_intf_pins internalRAM_interconnect/M00_AXI]
-  connect_bd_intf_net -intf_net control_interconnect_M06_AXI [get_bd_intf_pins control_interconnect/M06_AXI] [get_bd_intf_pins system_management_wiz_0/S_AXI_LITE]
+  connect_bd_intf_net -intf_net control_interconnect_M04_AXI [get_bd_intf_pins control_interconnect/M04_AXI] [get_bd_intf_pins system_management_wiz_0/S_AXI_LITE]
   connect_bd_intf_net -intf_net dac230_clk_1 [get_bd_intf_ports dac230_clk] [get_bd_intf_pins usp_rf_data_converter_1/dac2_clk]
   connect_bd_intf_net -intf_net dac2_clk_1 [get_bd_intf_ports dac2_clk] [get_bd_intf_pins usp_rf_data_converter_1/dac0_clk]
   connect_bd_intf_net -intf_net hier_dac2_play_M_AXIS1 [get_bd_intf_pins hier_dac2_play/M_AXIS] [get_bd_intf_pins usp_rf_data_converter_1/s20_axis]
   connect_bd_intf_net -intf_net hier_dac_play_M_AXIS [get_bd_intf_pins hier_dac_play/M_AXIS] [get_bd_intf_pins usp_rf_data_converter_1/s00_axis]
-  connect_bd_intf_net -intf_net internalRAM_interconnect_M05_AXI1 [get_bd_intf_pins hier_dac2_play/S_AXI] [get_bd_intf_pins internalRAM_interconnect/M05_AXI]
+  connect_bd_intf_net -intf_net internalRAM_interconnect_M01_AXI [get_bd_intf_pins hier_dac2_play/S_AXI] [get_bd_intf_pins internalRAM_interconnect/M01_AXI]
   connect_bd_intf_net -intf_net ps8_0_axi_periph_M00_AXI [get_bd_intf_pins control_interconnect/M00_AXI] [get_bd_intf_pins usp_rf_data_converter_1/s_axi]
-  connect_bd_intf_net -intf_net s_axi_lite_1 [get_bd_intf_pins clocktree/s_axi_lite] [get_bd_intf_pins control_interconnect/M02_AXI]
+  connect_bd_intf_net -intf_net s_axi_lite_1 [get_bd_intf_pins clocktree/s_axi_lite] [get_bd_intf_pins control_interconnect/M01_AXI]
   connect_bd_intf_net -intf_net sysref_in_0_1 [get_bd_intf_ports sysref_in] [get_bd_intf_pins usp_rf_data_converter_1/sysref_in]
   connect_bd_intf_net -intf_net usp_rf_data_converter_1_vout00 [get_bd_intf_ports vout00] [get_bd_intf_pins usp_rf_data_converter_1/vout00]
   connect_bd_intf_net -intf_net usp_rf_data_converter_1_vout20 [get_bd_intf_ports vout20] [get_bd_intf_pins usp_rf_data_converter_1/vout20]
-  connect_bd_intf_net -intf_net vin0_01_0_1 [get_bd_intf_ports vin0_01] [get_bd_intf_pins usp_rf_data_converter_1/vin0_01]
-  connect_bd_intf_net -intf_net vin0_23_1_1 [get_bd_intf_ports vin0_23] [get_bd_intf_pins usp_rf_data_converter_1/vin0_23]
-  connect_bd_intf_net -intf_net vin1_01_0_1 [get_bd_intf_ports vin1_01] [get_bd_intf_pins usp_rf_data_converter_1/vin1_01]
-  connect_bd_intf_net -intf_net vin2_01_0_1 [get_bd_intf_ports vin2_01] [get_bd_intf_pins usp_rf_data_converter_1/vin2_01]
-  connect_bd_intf_net -intf_net vin2_23_0_1 [get_bd_intf_ports vin2_23] [get_bd_intf_pins usp_rf_data_converter_1/vin2_23]
   connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_LPD [get_bd_intf_pins control_interconnect/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_LPD]
   connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM1_FPD [get_bd_intf_pins internalRAM_interconnect/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM1_FPD]
 
   # Create port connections
   connect_bd_net -net BUFG_I_0_1 [get_bd_ports PL_CLK] [get_bd_pins clocktree/PL_CLK]
-  connect_bd_net -net RFegressReset_peripheral_aresetn [get_bd_pins clocktree/egress_aresetn] [get_bd_pins hier_dac2_play/s_axi_aresetn] [get_bd_pins hier_dac_play/s_axi_aresetn] [get_bd_pins internalRAM_interconnect/ARESETN] [get_bd_pins internalRAM_interconnect/M00_ARESETN] [get_bd_pins internalRAM_interconnect/M01_ARESETN] [get_bd_pins internalRAM_interconnect/M02_ARESETN] [get_bd_pins internalRAM_interconnect/M03_ARESETN] [get_bd_pins internalRAM_interconnect/M04_ARESETN] [get_bd_pins internalRAM_interconnect/M05_ARESETN] [get_bd_pins usp_rf_data_converter_1/s2_axis_aresetn]
-  connect_bd_net -net RFingressReset_peripheral_aresetn [get_bd_pins clocktree/ingress_aresetn] [get_bd_pins usp_rf_data_converter_1/m0_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/m1_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/m2_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/m3_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/s0_axis_aresetn]
-  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clocktree/clkRF] [get_bd_pins hier_dac2_play/aclk] [get_bd_pins hier_dac_play/aclk] [get_bd_pins usp_rf_data_converter_1/m0_axis_aclk] [get_bd_pins usp_rf_data_converter_1/m1_axis_aclk] [get_bd_pins usp_rf_data_converter_1/m2_axis_aclk] [get_bd_pins usp_rf_data_converter_1/m3_axis_aclk] [get_bd_pins usp_rf_data_converter_1/s0_axis_aclk] [get_bd_pins usp_rf_data_converter_1/s2_axis_aclk]
-  connect_bd_net -net clk_wiz_adc0_clk_out2 [get_bd_pins clocktree/clkRFdiv2] [get_bd_pins gpio_control/dest_clk] [get_bd_pins hier_dac2_play/axis_clk] [get_bd_pins hier_dac_play/axis_clk] [get_bd_pins internalRAM_interconnect/ACLK] [get_bd_pins internalRAM_interconnect/M00_ACLK] [get_bd_pins internalRAM_interconnect/M01_ACLK] [get_bd_pins internalRAM_interconnect/M02_ACLK] [get_bd_pins internalRAM_interconnect/M03_ACLK] [get_bd_pins internalRAM_interconnect/M04_ACLK] [get_bd_pins internalRAM_interconnect/M05_ACLK]
-  connect_bd_net -net clocktree_bus_struct_reset -boundary_type upper [get_bd_pins clocktree/bus_struct_reset]
+  connect_bd_net -net RFegressReset_peripheral_aresetn [get_bd_pins clocktree/egress_aresetn] [get_bd_pins hier_dac2_play/s_axi_aresetn] [get_bd_pins hier_dac_play/s_axi_aresetn] [get_bd_pins internalRAM_interconnect/ARESETN] [get_bd_pins internalRAM_interconnect/M00_ARESETN] [get_bd_pins internalRAM_interconnect/M01_ARESETN] [get_bd_pins usp_rf_data_converter_1/s0_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/s2_axis_aresetn]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clocktree/clkRF] [get_bd_pins hier_dac2_play/aclk] [get_bd_pins hier_dac_play/aclk] [get_bd_pins usp_rf_data_converter_1/s0_axis_aclk] [get_bd_pins usp_rf_data_converter_1/s2_axis_aclk]
+  connect_bd_net -net clk_wiz_adc0_clk_out2 [get_bd_pins clocktree/clkRFdiv2] [get_bd_pins gpio_control/dest_clk] [get_bd_pins hier_dac2_play/axis_clk] [get_bd_pins hier_dac_play/axis_clk] [get_bd_pins internalRAM_interconnect/ACLK] [get_bd_pins internalRAM_interconnect/M00_ACLK] [get_bd_pins internalRAM_interconnect/M01_ACLK]
   connect_bd_net -net clocktree_interrupt [get_bd_pins clocktree/interrupt] [get_bd_pins xlconcat_0/In1]
   connect_bd_net -net gpio_control_dac0_sample_count1 [get_bd_pins gpio_control/dac0_sample_count] [get_bd_pins hier_dac_play/sample_count]
   connect_bd_net -net gpio_control_dac2_enable1 [get_bd_pins gpio_control/dac2_enable] [get_bd_pins hier_dac2_play/enable]
   connect_bd_net -net gpio_control_dac2_sample_count1 [get_bd_pins gpio_control/dac2_sample_count] [get_bd_pins hier_dac2_play/sample_count]
   connect_bd_net -net gpio_control_dac_enable [get_bd_pins gpio_control/dac_enable] [get_bd_pins hier_dac_play/enable]
-  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins clocktree/s_axi_aresetn] [get_bd_pins control_interconnect/ARESETN] [get_bd_pins control_interconnect/M00_ARESETN] [get_bd_pins control_interconnect/M01_ARESETN] [get_bd_pins control_interconnect/M02_ARESETN] [get_bd_pins control_interconnect/M03_ARESETN] [get_bd_pins control_interconnect/M04_ARESETN] [get_bd_pins control_interconnect/M05_ARESETN] [get_bd_pins control_interconnect/M06_ARESETN] [get_bd_pins control_interconnect/S00_ARESETN] [get_bd_pins gpio_control/s_axi_aresetn] [get_bd_pins internalRAM_interconnect/S00_ARESETN] [get_bd_pins system_management_wiz_0/s_axi_aresetn] [get_bd_pins usp_rf_data_converter_1/s_axi_aresetn]
-  connect_bd_net -net src_in_0_1 [get_bd_ports PL_SYSREF] [get_bd_pins clocktree/PL_SYSREF]
-  connect_bd_net -net synchronizeSYSREF_dest_out [get_bd_pins clocktree/UserSYSREF] [get_bd_pins usp_rf_data_converter_1/user_sysref_adc]
+  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins clocktree/s_axi_aresetn] [get_bd_pins control_interconnect/ARESETN] [get_bd_pins control_interconnect/M00_ARESETN] [get_bd_pins control_interconnect/M01_ARESETN] [get_bd_pins control_interconnect/M02_ARESETN] [get_bd_pins control_interconnect/M03_ARESETN] [get_bd_pins control_interconnect/M04_ARESETN] [get_bd_pins control_interconnect/S00_ARESETN] [get_bd_pins gpio_control/s_axi_aresetn] [get_bd_pins internalRAM_interconnect/S00_ARESETN] [get_bd_pins system_management_wiz_0/s_axi_aresetn] [get_bd_pins usp_rf_data_converter_1/s_axi_aresetn]
   connect_bd_net -net system_management_wiz_0_ip2intc_irpt [get_bd_pins system_management_wiz_0/ip2intc_irpt] [get_bd_pins xlconcat_0/In2]
   connect_bd_net -net usp_rf_data_converter_1_irq [get_bd_pins usp_rf_data_converter_1/irq] [get_bd_pins xlconcat_0/In0]
   connect_bd_net -net xlconcat_0_dout [get_bd_pins xlconcat_0/dout] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins clocktree/s_axi_aclk] [get_bd_pins control_interconnect/ACLK] [get_bd_pins control_interconnect/M00_ACLK] [get_bd_pins control_interconnect/M01_ACLK] [get_bd_pins control_interconnect/M02_ACLK] [get_bd_pins control_interconnect/M03_ACLK] [get_bd_pins control_interconnect/M04_ACLK] [get_bd_pins control_interconnect/M05_ACLK] [get_bd_pins control_interconnect/M06_ACLK] [get_bd_pins control_interconnect/S00_ACLK] [get_bd_pins gpio_control/s_axi_aclk] [get_bd_pins internalRAM_interconnect/S00_ACLK] [get_bd_pins system_management_wiz_0/s_axi_aclk] [get_bd_pins usp_rf_data_converter_1/s_axi_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_lpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins clocktree/s_axi_aclk] [get_bd_pins control_interconnect/ACLK] [get_bd_pins control_interconnect/M00_ACLK] [get_bd_pins control_interconnect/M01_ACLK] [get_bd_pins control_interconnect/M02_ACLK] [get_bd_pins control_interconnect/M03_ACLK] [get_bd_pins control_interconnect/M04_ACLK] [get_bd_pins control_interconnect/S00_ACLK] [get_bd_pins gpio_control/s_axi_aclk] [get_bd_pins internalRAM_interconnect/S00_ACLK] [get_bd_pins system_management_wiz_0/s_axi_aclk] [get_bd_pins usp_rf_data_converter_1/s_axi_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_lpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins clocktree/ext_reset_in] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
 
   # Create address segments

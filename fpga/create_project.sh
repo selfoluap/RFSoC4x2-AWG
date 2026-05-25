@@ -4,6 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 vivado -mode batch \
-  -source build.tcl \
-  -log build.log \
-  -journal build.jou
+  -source create_project.tcl \
+  -log create_project.log \
+  -journal create_project.jou

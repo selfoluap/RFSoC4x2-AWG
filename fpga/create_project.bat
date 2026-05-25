@@ -4,8 +4,8 @@ setlocal
 cd /d "%~dp0"
 
 vivado -mode batch ^
-  -source build.tcl ^
-  -log build.log ^
-  -journal build.jou
+  -source create_project.tcl ^
+  -log create_project.log ^
+  -journal create_project.jou
 
 endlocal

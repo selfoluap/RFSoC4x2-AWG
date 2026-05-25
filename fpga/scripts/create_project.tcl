@@ -54,6 +54,20 @@ proc validate_current_design {} {
     require_equal "DAC2 streamer USE_VECTOR_COUNT" \
         [get_property CONFIG.USE_VECTOR_COUNT [get_bd_cells /hier_dac2_play/DACRAMstreamer_0]] "1"
 
+    require_equal "RFDC ADC0 disabled" \
+        [get_property CONFIG.ADC0_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
+    require_equal "RFDC ADC1 disabled" \
+        [get_property CONFIG.ADC1_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
+    require_equal "RFDC ADC2 disabled" \
+        [get_property CONFIG.ADC2_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
+    require_equal "RFDC ADC3 disabled" \
+        [get_property CONFIG.ADC3_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
+
+    require_equal "control interconnect master count" \
+        [get_property CONFIG.NUM_MI [get_bd_cells /control_interconnect]] "5"
+    require_equal "internal RAM interconnect master count" \
+        [get_property CONFIG.NUM_MI [get_bd_cells /internalRAM_interconnect]] "2"
+
     require_equal "DAC GPIO channel 1 width" \
         [get_property CONFIG.C_GPIO_WIDTH [get_bd_cells /gpio_control/axi_gpio_dac]] "2"
     require_equal "DAC GPIO channel 2 width" \
@@ -66,4 +80,14 @@ proc validate_current_design {} {
     require_connected "DAC0 sample_count" [get_bd_pins /hier_dac_play/sample_count]
     require_connected "DAC2 sample_count" [get_bd_pins /hier_dac2_play/sample_count]
     require_connected "DAC2 RFDC stream" [get_bd_intf_pins /usp_rf_data_converter_1/s20_axis]
+
+    require_absent "ADC2 clock input port" [get_bd_intf_ports -quiet adc2_clk]
+    require_absent "ADC analog input ports" [get_bd_intf_ports -quiet {vin0_01 vin0_23 vin1_01 vin2_01 vin2_23}]
+    require_absent "Unused DAC vout10 port" [get_bd_intf_ports -quiet vout10]
+    require_absent "PL_SYSREF fabric port" [get_bd_ports -quiet PL_SYSREF]
+    require_absent "clocktree UserSYSREF pin" [get_bd_pins -quiet /clocktree/UserSYSREF]
+    require_absent "clocktree bus_struct_reset pin" [get_bd_pins -quiet /clocktree/bus_struct_reset]
+    require_absent "ADC fabric SYSREF synchronizer" [get_bd_cells -quiet /clocktree/synchronizeSYSREF]
+    require_absent "extra control interconnect master ports" [get_bd_intf_pins -quiet {/control_interconnect/M05_AXI /control_interconnect/M06_AXI}]
+    require_absent "extra internal RAM interconnect master ports" [get_bd_intf_pins -quiet {/internalRAM_interconnect/M02_AXI /internalRAM_interconnect/M03_AXI /internalRAM_interconnect/M04_AXI /internalRAM_interconnect/M05_AXI}]
 }

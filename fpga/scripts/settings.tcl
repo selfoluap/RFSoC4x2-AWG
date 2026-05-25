@@ -1,6 +1,6 @@
 set ::cfg(repo_root) [file normalize [file join [file dirname [info script]] ..]]
 set ::cfg(vivado_version) "2022.1"
-set ::cfg(project_name) "thesis_9_83GHz"
+set ::cfg(project_name) "rfsocawg"
 set ::cfg(part) "xczu48dr-fsvg1517-2-e"
 set ::cfg(board_part) "xilinx.com:zcu208:part0:2.0"
 set ::cfg(top) "bd_wrapper"
@@ -12,9 +12,9 @@ set ::cfg(project_dir) [file join $::cfg(build_root) vivado]
 set ::cfg(export_root) [file join $::cfg(repo_root) artifacts]
 set ::cfg(stamp) [clock format [clock seconds] -format "%Y%m%d_%H%M%S"]
 set ::cfg(run_name) "impl_dual_dacplay_full_$::cfg(stamp)"
-set ::cfg(export_name) "pl122p88-ps-s00-100m-dual-dacplay-full-$::cfg(stamp)"
+set ::cfg(export_name) "rfsocawg-dual-dacplay-full-$::cfg(stamp)"
 set ::cfg(export_dir) [file join $::cfg(export_root) $::cfg(export_name)]
-set ::cfg(pynq_name) "thesis"
+set ::cfg(pynq_name) "rfsocawg"
 
 set ::cfg(rtl_files) [list \
     [file join $::cfg(repo_root) src rtl DACRAMstreamer.v] \
@@ -50,4 +50,11 @@ proc require_connected {label obj} {
         error "$label is not connected"
     }
     puts "CHECK OK: $label connected"
+}
+
+proc require_absent {label obj} {
+    if {[llength $obj] != 0} {
+        error "$label should not exist: $obj"
+    }
+    puts "CHECK OK: $label absent"
 }

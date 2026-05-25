@@ -13,9 +13,17 @@ Other Vivado versions may require IP upgrades and may not reproduce the same imp
 
 ## Scripts
 
-- `create_project.sh`: Linux launcher for the full build
-- `create_project.bat`: Windows launcher for the full build
-- `build.tcl`: top-level Vivado batch entrypoint
+- `create_project.sh`: Linux launcher for project creation
+- `create_project.bat`: Windows launcher for project creation
+- `build_bitstream.sh`: Linux launcher for synthesis, implementation, bitstream generation, and artifact export
+- `build_bitstream.bat`: Windows launcher for synthesis, implementation, bitstream generation, and artifact export
+- `build_all.sh`: Linux launcher for the complete create-and-build flow
+- `build_all.bat`: Windows launcher for the complete create-and-build flow
+- `clean.sh`: Linux cleanup for generated Vivado files
+- `clean.bat`: Windows cleanup for generated Vivado files
+- `create_project.tcl`: top-level Vivado project creation entrypoint
+- `build_bitstream.tcl`: top-level Vivado bitstream build entrypoint
+- `build_all.tcl`: top-level Vivado complete rebuild entrypoint
 - `scripts/settings.tcl`: project, device, path, and output settings
 - `scripts/create_project.tcl`: creates the Vivado project from source
 - `scripts/build_bitstream.tcl`: runs synthesis, implementation, and bitstream generation
@@ -23,22 +31,48 @@ Other Vivado versions may require IP upgrades and may not reproduce the same imp
 
 ## Build Commands
 
-From this folder on Linux:
+From this folder on Linux, create the Vivado project first:
 
 ```bash
 ./create_project.sh
 ```
 
-From this folder on Windows, using a Vivado 2022.1 command prompt:
+Then build the bitstream:
+
+```bash
+./build_bitstream.sh
+```
+
+On Windows, using a Vivado 2022.1 command prompt:
 
 ```bat
 create_project.bat
+build_bitstream.bat
 ```
 
-Equivalent direct Vivado command:
+Equivalent direct Vivado commands:
 
 ```bash
-vivado -mode batch -source build.tcl -log build.log -journal build.jou
+vivado -mode batch -source create_project.tcl -log create_project.log -journal create_project.jou
+vivado -mode batch -source build_bitstream.tcl -log build_bitstream.log -journal build_bitstream.jou
+```
+
+To run both steps in one command:
+
+```bash
+./build_all.sh
+```
+
+To remove generated project files and Vivado logs from this folder:
+
+```bash
+./clean.sh
+```
+
+On Windows:
+
+```bat
+clean.bat
 ```
 
 ## Outputs
@@ -46,17 +80,19 @@ vivado -mode batch -source build.tcl -log build.log -journal build.jou
 The generated Vivado project is written to:
 
 ```text
-build/vivado/
+build/vivado/rfsocawg.xpr
 ```
 
 Exported hardware artifacts are written to:
 
 ```text
-artifacts/pl122p88-ps-s00-100m-dual-dacplay-full-<timestamp>/
+artifacts/rfsocawg-dual-dacplay-full-<timestamp>/
 ```
 
-Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `thesis.bit`, `thesis.hwh`, and final route, timing, and DRC reports.
+Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `rfsocawg.bit`, `rfsocawg.hwh`, and final route, timing, and DRC reports.
 
 ## Reference Run
 
-This package was fully routed with 0 routing errors, and met timing with `WNS=0.054 ns` and `TNS=0.000 ns`. Howevever, use your newly generated reports as the source of truth for a fresh build.
+This package has been checked against local reference run `impl_dual_dacplay_full_20260523_171856`. That run completed bitstream generation, was fully routed with 0 routing errors, and met timing with `WNS=0.054 ns` and `TNS=0.000 ns`.
+
+Use your newly generated reports as the source of truth for a fresh build.
