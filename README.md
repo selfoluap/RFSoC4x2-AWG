@@ -30,6 +30,12 @@ RFSoC4x2-AWG/
 └── tests/                 # Test files
 ```
 
+## FPGA Build
+
+The FPGA build process is automated using Vivado TCL scripts located in the `scripts/` folder:
+
+![alt text](blockdesign.png)
+
 ## Contributing
 
 If you find bugs or have any other ideas in mind what to add, please feel free to open a pull request.
