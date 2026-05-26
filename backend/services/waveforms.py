@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 
 from backend.signal_utils import parse_freqs_mhz, parse_ratios
-from lib import signals
+from firmware import signals
 
 
 @lru_cache(maxsize=32)

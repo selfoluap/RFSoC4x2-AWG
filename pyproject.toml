@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfsoc4x2-awg"
+version = "0.1.0"
+description = "PYNQ based firmware helpers and notebooks for the RFSoC4x2 AWG overlay"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+]
+
+[tool.setuptools.packages.find]
+include = ["firmware*"]
+
+[tool.setuptools.package-data]
+"firmware.notebooks" = ["*.ipynb"]
+
+[project.entry-points."pynq.notebooks"]
+rfsoc4x2-awg = "firmware.notebooks"
