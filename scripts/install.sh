@@ -5,10 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NOTEBOOK_PATH="${PYNQ_JUPYTER_NOTEBOOKS:-$HOME/jupyter_notebooks}"
 
-if [[ "${RFSOC_AWG_EDITABLE:-0}" == "1" ]]; then
-    python3 -m pip install -e "$REPO_ROOT"
-else
+if [[ "${RFSOC_AWG_WHEEL:-0}" == "1" ]]; then
     python3 -m pip install "$REPO_ROOT"
+else
+    python3 -m pip install -e "$REPO_ROOT"
 fi
 
 copy_notebooks() {
