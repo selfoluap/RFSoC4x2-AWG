@@ -61,7 +61,7 @@ class DacPlayer:
         self.length_gpio.write(length, self.length_mask)
         self.waveform_length = length
 
-    def load_waveform(self, waveform, restore_enable=True):
+    def load_waveform(self, waveform):
         data = np.asarray(waveform, dtype=np.int16)
         if data.ndim != 1:
             raise ValueError("waveform must be a 1D array")
@@ -71,16 +71,8 @@ class DacPlayer:
                 f"is {self.capacity} int16 samples"
             )
 
-        was_enabled = self.is_enabled()
-        try:
-            if was_enabled:
-                self.disable()
-
-            self.buffer[: data.size] = np.ascontiguousarray(data)
-            self.set_waveform_length(data.size)
-        finally:
-            if was_enabled and restore_enable:
-                self.enable()
+        self.buffer[: data.size] = np.ascontiguousarray(data)
+        self.set_waveform_length(data.size)
 
     def info(self):
         return {

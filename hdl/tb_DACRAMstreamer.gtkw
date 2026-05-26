@@ -1,0 +1,25 @@
+[*]
+[*] GTKWave Analyzer savefile for DACRAMstreamer waveform inspection
+[*]
+[dumpfile] "tb_DACRAMstreamer.vcd"
+[savefile] "tb_DACRAMstreamer.gtkw"
+[timestart] 0
+[size] 1600 900
+[pos] -1 -1
+[sst_width] 260
+[signals_width] 220
+[sst_expanded] 1
+[sst_vpaned_height] 260
+@24
+tb_DACRAMstreamer.axis_wave_sample[15:0]
+tb_DACRAMstreamer.bram_wave_sample[15:0]
+@24
+tb_DACRAMstreamer.sample_count_view[31:0]
+tb_DACRAMstreamer.sample_idx_view[4:0]
+@28
+tb_DACRAMstreamer.sample_view_clk
+tb_DACRAMstreamer.axis_clk
+tb_DACRAMstreamer.enable
+tb_DACRAMstreamer.cap_axis_tdata[31:0]
+[pattern_trace] 1
+[pattern_trace] 0
