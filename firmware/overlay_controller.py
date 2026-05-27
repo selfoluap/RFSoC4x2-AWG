@@ -8,6 +8,8 @@ import xrfclk
 
 LMK_FREQ_MHZ = 245.76
 LMX_FREQ_MHZ = 491.52
+RF_CLOCK_SOURCE_INTERNAL = "internal"
+RF_CLOCK_SOURCE_EXTERNAL = "external"
 DEFAULT_BITFILE = Path(__file__).resolve().parents[1] / "overlays" / "thesis_v19.bit"
 
 
@@ -91,6 +93,7 @@ class OverlayController(Overlay):
 
     def __init__(self, bitfile=DEFAULT_BITFILE, download=True, **kwargs):
         xrfclk.set_ref_clks(lmk_freq=LMK_FREQ_MHZ, lmx_freq=LMX_FREQ_MHZ)
+        self.set_internal_rf_clks()
         time.sleep(0.1)
 
         self.bitfile_path = str(Path(bitfile).expanduser())
@@ -122,6 +125,7 @@ class OverlayController(Overlay):
             "clocks": {
                 "lmk_freq_mhz": LMK_FREQ_MHZ,
                 "lmx_freq_mhz": LMX_FREQ_MHZ,
+                "rf_clock_source": self.rf_clock_source,
             },
             "rfdc": {
                 "dac0_sampling_rate_gsps": self._rfdc_parameter("C_DAC0_Sampling_Rate"),
@@ -140,3 +144,21 @@ class OverlayController(Overlay):
             return float(value)
         except (TypeError, ValueError):
             return value
+
+    def set_external_rf_clks(self):
+        """Use the 10 MHz reference connected to CLK_IN for the RF clocks."""
+        for lmk in xrfclk.lmk_devices:
+            with open(lmk["spi_device"], "rb+", buffering=0) as f:
+                data = b"\x01\x47\x0A"
+                f.write(data)
+
+        self.rf_clock_source = RF_CLOCK_SOURCE_EXTERNAL
+
+    def set_internal_rf_clks(self):
+        """Use the on-board oscillator as the RF clock reference."""
+        for lmk in xrfclk.lmk_devices:
+            with open(lmk["spi_device"], "rb+", buffering=0) as f:
+                data = b"\x01\x47\x1A"
+                f.write(data)
+
+        self.rf_clock_source = RF_CLOCK_SOURCE_INTERNAL
