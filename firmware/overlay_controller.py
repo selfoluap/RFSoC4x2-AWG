@@ -96,6 +96,7 @@ class OverlayController(Overlay):
     """PYNQ overlay controller for the RFSoC4x2 AWG bitstream."""
 
     def __init__(self, bitfile=DEFAULT_BITFILE, download=True, **kwargs):
+        print("OverlayController: v1.0.0")
         xrfclk.set_ref_clks(lmk_freq=LMK_FREQ_MHZ, lmx_freq=LMX_FREQ_MHZ)
         self.set_internal_rf_clks()
         time.sleep(0.1)
