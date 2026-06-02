@@ -12,6 +12,9 @@ LMX_FREQ_MHZ = 491.52
 RF_CLOCK_SOURCE_INTERNAL = "internal"
 RF_CLOCK_SOURCE_EXTERNAL = "external"
 DEFAULT_BITFILE = Path(__file__).resolve().parents[1] / "overlays" / "rfsocawg.bit"
+ACTIVE_DAC_TILES = 0b0101
+DAC_REF_TILE = 2
+MTS_TARGET_LATENCY_AUTO = -1
 
 
 class DacPlayer:
@@ -146,6 +149,24 @@ class OverlayController(Overlay):
             return float(value)
         except (TypeError, ValueError):
             return value
+
+    def sync_dac_tiles(self, target_latency=MTS_TARGET_LATENCY_AUTO):
+        """Configure RFDC multi-tile synchronization for the active DAC tiles."""
+        self.xrfdc.mts_dac_config.Tiles = ACTIVE_DAC_TILES
+        self.xrfdc.mts_dac_config.RefTile = DAC_REF_TILE
+        self.xrfdc.mts_dac_config.SysRef_Enable = 1
+        self.xrfdc.mts_dac_config.Target_Latency = target_latency
+        return self.xrfdc.mts_dac()
+
+    def dac_mts_info(self):
+        """Return the current DAC MTS configuration fields."""
+        config = self.xrfdc.mts_dac_config
+        return {
+            "tiles": config.Tiles,
+            "ref_tile": config.RefTile,
+            "sysref_enable": config.SysRef_Enable,
+            "target_latency": config.Target_Latency,
+        }
 
     def set_external_rf_clks(self):
         """Use the 10 MHz reference connected to CLK_IN for the RF clocks."""
