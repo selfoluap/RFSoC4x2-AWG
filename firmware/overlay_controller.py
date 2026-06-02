@@ -4,6 +4,7 @@ import time
 import numpy as np
 from pynq import MMIO, Overlay
 import xrfclk
+import xrfdc
 
 
 LMK_FREQ_MHZ = 245.76
@@ -89,7 +90,7 @@ class DacPlayer:
 
 
 class OverlayController(Overlay):
-    """PYNQ overlay controller for the rfsocawg RFSoC4x2 AWG bitstream."""
+    """PYNQ overlay controller for the RFSoC4x2 AWG bitstream."""
 
     def __init__(self, bitfile=DEFAULT_BITFILE, download=True, **kwargs):
         xrfclk.set_ref_clks(lmk_freq=LMK_FREQ_MHZ, lmx_freq=LMX_FREQ_MHZ)
@@ -98,6 +99,7 @@ class OverlayController(Overlay):
 
         self.bitfile_path = str(Path(bitfile).expanduser())
         super().__init__(self.bitfile_path, download=download, **kwargs)
+        self.xrfdc = self.usp_rf_data_converter_1       
 
         self.dac0 = DacPlayer(
             overlay=self,
