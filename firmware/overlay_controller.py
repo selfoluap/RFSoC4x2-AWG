@@ -77,7 +77,13 @@ class DacPlayer:
                 f"is {self.capacity} int16 samples"
             )
 
-        self.buffer[: data.size] = np.ascontiguousarray(data)
+        if data.size == self.capacity:
+            write_data = np.ascontiguousarray(data)
+        else:
+            write_data = np.zeros(self.capacity, dtype=np.int16)
+            write_data[: data.size] = data
+
+        self.buffer[:] = write_data
         self.set_waveform_length(data.size)
 
     def info(self):
