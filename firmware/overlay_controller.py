@@ -10,7 +10,7 @@ LMK_FREQ_MHZ = 245.76
 LMX_FREQ_MHZ = 491.52
 RF_CLOCK_SOURCE_INTERNAL = "internal"
 RF_CLOCK_SOURCE_EXTERNAL = "external"
-DEFAULT_BITFILE = Path(__file__).resolve().parents[1] / "overlays" / "thesis_v19.bit"
+DEFAULT_BITFILE = Path(__file__).resolve().parents[1] / "overlays" / "rfsocawg.bit"
 
 
 class DacPlayer:
@@ -89,7 +89,7 @@ class DacPlayer:
 
 
 class OverlayController(Overlay):
-    """PYNQ overlay controller for the thesis_v19 RFSoC4x2 AWG bitstream."""
+    """PYNQ overlay controller for the rfsocawg RFSoC4x2 AWG bitstream."""
 
     def __init__(self, bitfile=DEFAULT_BITFILE, download=True, **kwargs):
         xrfclk.set_ref_clks(lmk_freq=LMK_FREQ_MHZ, lmx_freq=LMX_FREQ_MHZ)
