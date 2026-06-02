@@ -29,6 +29,34 @@ from firmware import OverlayController
 from firmware.signals import sine, sawtooth
 ```
 
+## Web Application Deployment
+
+The web application is deployed directly on the RFSoC board. The backend runs as a native systemd service in the PYNQ environment, and nginx serves the built frontend from `/var/www/rfsoc-awg` while proxying `/api/` to the backend.
+
+Build the frontend before copying it to the board:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+Copy the repository and `frontend/dist` to the RFSoC board at `/home/xilinx/RFSoC4x2-AWG`, then install the services on the board:
+
+```bash
+sudo scripts/install_backend_service.sh
+sudo scripts/install_frontend_nginx.sh
+sudo scripts/deploy_frontend.sh
+```
+
+Check the deployment:
+
+```bash
+sudo systemctl status rfsoc-backend
+curl http://127.0.0.1:8001/status
+curl http://127.0.0.1/api/status
+```
+
 ## Repository Structure
 
 ```
@@ -39,6 +67,7 @@ RFSoC4x2-AWG/
 ├── frontend/              # React frontend
 ├── firmware/              # Firmware-facing hardware helper modules
 ├── overlays/              # FPGA bitstreams and hardware handoffs
+├── deploy/                # systemd and nginx deployment files
 ├── scripts/               # Utility and deployment scripts
 └── tests/                 # Test files
 ```

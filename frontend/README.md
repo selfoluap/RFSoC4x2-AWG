@@ -10,10 +10,20 @@ A second frontend implementation for RFSoC4x2-AWG, built with:
 ## Run locally
 
 ```bash
-cd frontend-v2
+cd frontend
 npm install
 npm run dev
 ```
+
+## Build
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+The production build is written to `frontend/dist` and is served by nginx on the RFSoC board.
 
 ## Routing / pages
 
@@ -24,16 +34,10 @@ npm run dev
 
 ## Backend configuration
 
-Default backend URL is `http://localhost:8001`.
+Default backend URL is `/api`, which lets nginx proxy requests to the backend service.
 
 Override full URL:
 
 ```bash
 VITE_RFSOC_BACKEND_URL=http://<host>:8001 npm run dev
-```
-
-Override only port:
-
-```bash
-VITE_RFSOC_BACKEND_PORT=8001 npm run dev
 ```

@@ -30,15 +30,7 @@ def generate_serrodyne_cached(
         continuous_phase=False,
     )
 
-    if len(y) < buf_len:
-        reps = int(np.ceil(buf_len / len(y)))
-        y_padded = np.tile(y, reps)[:buf_len]
-        x_padded = np.tile(x, reps)[:buf_len]
-    else:
-        y_padded = y[:buf_len]
-        x_padded = x[:buf_len]
-
-    return tuple(x_padded.tolist()), tuple(y_padded.tolist()), N
+    return tuple(x.tolist()), tuple(y.tolist()), N
 
 
 def generate_simple_waveform(
