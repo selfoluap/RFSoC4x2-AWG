@@ -13,9 +13,7 @@ artifacts/
 *.pb
 *.rpt
 *.dcp
-*.bit
 *.ltx
-*.hwh
 *.xsa
 *.hwdef
 *.html
