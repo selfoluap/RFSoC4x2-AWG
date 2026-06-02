@@ -23,3 +23,4 @@ install -m 0644 "$NGINX_SOURCE" "$NGINX_AVAILABLE"
 ln -sfn "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 nginx -t
 systemctl reload-or-restart nginx
+printf 'RFSoC AWG frontend is configured for http://<rfsoc-board-ip>:8080/\n'

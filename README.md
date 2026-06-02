@@ -54,8 +54,10 @@ Check the deployment:
 ```bash
 sudo systemctl status rfsoc-backend
 curl http://127.0.0.1:8001/status
-curl http://127.0.0.1/api/status
+curl http://127.0.0.1:8080/api/status
 ```
+
+Open the frontend at `http://<rfsoc-board-ip>:8080/`.
 
 ## Repository Structure
 
