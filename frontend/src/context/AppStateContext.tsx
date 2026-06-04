@@ -1,21 +1,16 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { api } from "../api";
-import type { ConstantsResponse, FFTResponse, StatusResponse, WaveformResponse } from "../types";
+import type { ConstantsResponse, StatusResponse } from "../types";
 
 interface AppState {
   status: StatusResponse | null;
   constants: ConstantsResponse | null;
-  waveform: WaveformResponse | null;
-  fft: FFTResponse | null;
   loading: boolean;
   error: string | null;
   setStatus: (v: StatusResponse | null) => void;
   setConstants: (v: ConstantsResponse | null) => void;
-  setWaveform: (v: WaveformResponse | null) => void;
-  setFft: (v: FFTResponse | null) => void;
   loadBackendSummary: () => Promise<void>;
   run: (label: string, fn: () => Promise<void>) => Promise<void>;
-  runWaveformGeneration: (label: string, generate: () => Promise<WaveformResponse>) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -23,8 +18,6 @@ const AppStateContext = createContext<AppState | null>(null);
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [constants, setConstants] = useState<ConstantsResponse | null>(null);
-  const [waveform, setWaveform] = useState<WaveformResponse | null>(null);
-  const [fft, setFft] = useState<FFTResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,13 +32,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
-
-  const runWaveformGeneration = useCallback(async (label: string, generate: () => Promise<WaveformResponse>) => {
-    await run(label, async () => {
-      setWaveform(await generate());
-      setFft(await api.getWaveformFft());
-    });
-  }, [run]);
 
   const loadBackendSummary = useCallback(async () => {
     setLoading(true);
@@ -86,19 +72,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       constants,
-      waveform,
-      fft,
       loading,
       error,
       setStatus,
       setConstants,
-      setWaveform,
-      setFft,
       loadBackendSummary,
-      run,
-      runWaveformGeneration
+      run
     }),
-    [status, constants, waveform, fft, loading, error, loadBackendSummary, run, runWaveformGeneration]
+    [status, constants, loading, error, loadBackendSummary, run]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

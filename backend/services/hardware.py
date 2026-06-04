@@ -7,6 +7,7 @@ from firmware import OverlayController
 
 DAC_AMP = int(np.iinfo(np.int16).max)
 DEFAULT_BITFILE = os.environ.get("RFSOC_BITFILE")
+DAC_CHANNELS = ("dac0", "dac2")
 
 
 class HardwareService:
@@ -52,15 +53,34 @@ class HardwareService:
     def x_axis(self) -> np.ndarray:
         return np.arange(self.buf_len, dtype=float) / self.dac_sr
 
-    def write_dac(self, signal: np.ndarray, channel: str = "dac0") -> None:
+    def _dac_player(self, channel: str):
         player = getattr(self.controller, channel, None)
-        if player is None or not hasattr(player, "load_waveform"):
+        if channel not in DAC_CHANNELS or player is None:
             raise ValueError(f"Unsupported DAC channel: {channel}")
+        return player
 
+    def load_dac(self, signal: np.ndarray, channel: str = "dac0") -> None:
+        player = self._dac_player(channel)
         data = np.round(np.clip(np.asarray(signal, dtype=float), -DAC_AMP, DAC_AMP)).astype(np.int16)
         player.load_waveform(data)
-        player.enable()
         self.last_signal = data
+
+    def set_dac_enabled(self, channel: str, enabled: bool) -> None:
+        player = self._dac_player(channel)
+        if enabled:
+            player.enable()
+        else:
+            player.disable()
+
+    def dac_status(self, channel: str) -> dict:
+        player = self._dac_player(channel)
+        return {
+            "enabled": player.is_enabled(),
+            "waveform_length": player.waveform_length,
+        }
+
+    def dacs_status(self) -> dict:
+        return {channel: self.dac_status(channel) for channel in DAC_CHANNELS}
 
 
 hardware_service = HardwareService()
@@ -70,4 +90,5 @@ __all__ = [
     "HardwareService",
     "hardware_service",
     "DAC_AMP",
+    "DAC_CHANNELS",
 ]

@@ -1,24 +1,26 @@
-import { useMemo } from "react";
-import { useAppState } from "../context/AppStateContext";
 import { PlotlyChart } from "./PlotlyChart";
 
-export function WaveformPlots() {
-  const { waveform, fft } = useAppState();
-  const canPlotWaveform = useMemo(
-    () => Boolean(waveform?.x_axis?.length && waveform?.signal?.length),
-    [waveform]
-  );
+interface WaveformPlotsProps {
+  xAxis: number[];
+  signal: number[];
+  frequencies: number[];
+  magnitudes: number[];
+}
+
+export function WaveformPlots({ xAxis, signal, frequencies, magnitudes }: WaveformPlotsProps) {
+  const canPlotWaveform = Boolean(xAxis.length && signal.length);
+  const canPlotFft = Boolean(frequencies.length && magnitudes.length);
 
   return (
     <>
-      {canPlotWaveform && waveform?.x_axis && waveform?.signal && (
+      {canPlotWaveform && (
         <section className="panel plot-panel">
           <div className="plot-stack">
             <article className="plot-card">
               <PlotlyChart
-                title="Generated waveform"
-                x={waveform.x_axis}
-                y={waveform.signal}
+                title="Preview waveform"
+                x={xAxis}
+                y={signal}
                 xLabel="Time (s)"
                 yLabel="Amplitude"
                 tone="signal"
@@ -28,23 +30,22 @@ export function WaveformPlots() {
         </section>
       )}
 
-      {fft && (
+      {canPlotFft && (
         <section className="panel plot-panel">
           <div className="plot-stack">
             <article className="plot-card">
               <PlotlyChart
-                title="FFT"
-                x={fft.frequencies}
-                y={fft.magnitudes}
+                title="Expected FFT"
+                x={frequencies}
+                y={magnitudes}
                 xLabel="Frequency (MHz)"
-                yLabel="Magnitude (dB)"
+                yLabel="Magnitude"
                 tone="spectrum"
               />
             </article>
             <p className="subtitle fft-note">
-              This is the expected spectrum after modulation by the EOM. The waveform is mapped to
-              a phase-modulated complex exponential, and the FFT is taken from that modulated field
-              to show its spectral content.
+              This is a browser-side expected spectrum preview, not live hardware feedback. The
+              waveform is mapped to a phase-modulated complex exponential before the FFT.
             </p>
           </div>
         </section>

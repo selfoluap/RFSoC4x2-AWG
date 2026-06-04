@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException
@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.signal_utils import calculate_fft
-from backend.services.hardware import DAC_AMP, HardwareService, hardware_service
+from backend.services.hardware import DAC_AMP, DAC_CHANNELS, HardwareService, hardware_service
 from backend.services.waveforms import generate_serrodyne_cached, generate_simple_waveform
 
 
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class SerrodyneParams(BaseModel):
+    channels: List[Literal["dac0", "dac2"]] = Field(default_factory=lambda: ["dac0"])
     ratios_str: str = "1:5:3"
     freqs_str: str = "-1330, 0, 840"
     T_total_us: float = 1.0
@@ -27,6 +28,7 @@ class SerrodyneParams(BaseModel):
 
 
 class SimpleWaveformParams(BaseModel):
+    channels: List[Literal["dac0", "dac2"]] = Field(default_factory=lambda: ["dac0"])
     waveform_type: str
     freq_mhz: float = 250.0
     amp: int = 16383
@@ -50,6 +52,22 @@ class StatusResponse(BaseModel):
     hardware_initialized: bool
     buf_len: int
     dac_sr: float
+    dacs: dict[str, dict[str, Any]]
+
+
+class DacControlResponse(BaseModel):
+    success: bool
+    channel: str
+    enabled: bool
+    dacs: dict[str, dict[str, Any]]
+
+
+class WaveformLoadResponse(BaseModel):
+    success: bool
+    message: str
+    channels: List[str]
+    num_samples: int
+    dacs: dict[str, dict[str, Any]]
 
 
 class ConstantsResponse(BaseModel):
@@ -61,6 +79,16 @@ class ConstantsResponse(BaseModel):
 
 def get_hardware_service() -> HardwareService:
     return hardware_service
+
+
+def normalize_channels(channels: List[str]) -> List[str]:
+    unique_channels = list(dict.fromkeys(channels))
+    if not unique_channels:
+        raise ValueError("Select at least one DAC channel")
+    unsupported = [channel for channel in unique_channels if channel not in DAC_CHANNELS]
+    if unsupported:
+        raise ValueError(f"Unsupported DAC channel: {', '.join(unsupported)}")
+    return unique_channels
 
 
 def build_waveform_response(
@@ -130,15 +158,17 @@ def get_status(hardware: HardwareService = Depends(get_hardware_service)):
         hardware_initialized=hardware.initialized,
         buf_len=hardware.buf_len,
         dac_sr=hardware.dac_sr,
+        dacs=hardware.dacs_status(),
     )
 
 
-@app.post("/waveform/serrodyne", response_model=WaveformResponse)
-def generate_and_output_serrodyne(
+@app.post("/waveform/serrodyne/load", response_model=WaveformLoadResponse)
+def load_serrodyne_waveform(
     params: SerrodyneParams,
     hardware: HardwareService = Depends(get_hardware_service),
 ):
     try:
+        channels = normalize_channels(params.channels)
         _, y_tuple, n_samples = generate_serrodyne_cached(
             params.ratios_str,
             params.freqs_str,
@@ -148,12 +178,15 @@ def generate_and_output_serrodyne(
             hardware.dac_sr,
         )
         signal = np.array(y_tuple)
-        hardware.write_dac(signal)
-        return build_waveform_response(
-            message=f"Serrodyne waveform generated with {n_samples} base samples",
-            hardware=hardware,
-            signal=signal,
-            preview_samples=max(4000, n_samples),
+        for channel in channels:
+            hardware.load_dac(signal, channel)
+            hardware.set_dac_enabled(channel, False)
+        return WaveformLoadResponse(
+            success=True,
+            message=f"Serrodyne waveform loaded with {n_samples} base samples; output disabled",
+            channels=channels,
+            num_samples=len(signal),
+            dacs=hardware.dacs_status(),
         )
     except ValueError as e:
         logger.warning("Validation error generating serrodyne waveform: %s", e)
@@ -163,12 +196,13 @@ def generate_and_output_serrodyne(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/waveform/simple", response_model=WaveformResponse)
-def generate_and_output_simple(
+@app.post("/waveform/simple/load", response_model=WaveformLoadResponse)
+def load_simple_waveform(
     params: SimpleWaveformParams,
     hardware: HardwareService = Depends(get_hardware_service),
 ):
     try:
+        channels = normalize_channels(params.channels)
         signal = generate_simple_waveform(
             params.waveform_type,
             params.freq_mhz * 1e6,
@@ -177,11 +211,15 @@ def generate_and_output_simple(
             hardware.buf_len,
             params.duty_cycle,
         )
-        hardware.write_dac(signal)
-        return build_waveform_response(
-            message=f"{params.waveform_type} waveform generated at {params.freq_mhz} MHz",
-            hardware=hardware,
-            signal=signal,
+        for channel in channels:
+            hardware.load_dac(signal, channel)
+            hardware.set_dac_enabled(channel, False)
+        return WaveformLoadResponse(
+            success=True,
+            message=f"{params.waveform_type} waveform loaded at {params.freq_mhz} MHz; output disabled",
+            channels=channels,
+            num_samples=len(signal),
+            dacs=hardware.dacs_status(),
         )
     except ValueError as e:
         logger.warning("Validation error generating simple waveform: %s", e)
@@ -189,6 +227,38 @@ def generate_and_output_simple(
     except Exception as e:
         logger.exception("Unexpected error generating simple waveform")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/dac/all/disable", response_model=dict[str, Any])
+def disable_all_dacs(hardware: HardwareService = Depends(get_hardware_service)):
+    for channel in DAC_CHANNELS:
+        hardware.set_dac_enabled(channel, False)
+    return {
+        "success": True,
+        "dacs": hardware.dacs_status(),
+    }
+
+
+@app.post("/dac/{channel}/enable", response_model=DacControlResponse)
+def enable_dac(channel: Literal["dac0", "dac2"], hardware: HardwareService = Depends(get_hardware_service)):
+    hardware.set_dac_enabled(channel, True)
+    return DacControlResponse(
+        success=True,
+        channel=channel,
+        enabled=True,
+        dacs=hardware.dacs_status(),
+    )
+
+
+@app.post("/dac/{channel}/disable", response_model=DacControlResponse)
+def disable_dac(channel: Literal["dac0", "dac2"], hardware: HardwareService = Depends(get_hardware_service)):
+    hardware.set_dac_enabled(channel, False)
+    return DacControlResponse(
+        success=True,
+        channel=channel,
+        enabled=False,
+        dacs=hardware.dacs_status(),
+    )
 
 
 @app.get("/waveform/fft", response_model=FFTResponse)

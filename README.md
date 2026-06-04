@@ -33,6 +33,8 @@ from firmware.signals import sine, sawtooth
 
 The web application is deployed directly on the RFSoC board. The backend runs as a native systemd service in the PYNQ environment, and nginx serves the built frontend from `/var/www/rfsoc-awg` while proxying `/api/` to the backend.
 
+Waveform previews and expected FFT plots are calculated in the browser from the selected parameters. Loading a waveform writes it to the selected DAC BRAMs and leaves those DAC outputs disabled; DAC0 and DAC2 output enable states are controlled separately from the UI.
+
 Build the frontend before copying it to the board:
 
 ```bash

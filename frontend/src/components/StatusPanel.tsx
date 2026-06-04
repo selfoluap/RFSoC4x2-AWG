@@ -22,6 +22,13 @@ export function StatusPanel() {
       ]
     : [];
 
+  const dacItems = status?.dacs
+    ? Object.entries(status.dacs).map(([channel, dac]) => [
+        channel.toUpperCase(),
+        `${dac.enabled ? "enabled" : "disabled"}, ${dac.waveform_length.toLocaleString()} samples`,
+      ])
+    : [];
+
   return (
     <section className="panel status-shell">
       <div className="section-heading">
@@ -55,6 +62,20 @@ export function StatusPanel() {
             <p className="command-kicker">constants</p>
             <div className="readout-list">
               {constantItems.map(([label, value]) => (
+                <div key={label} className="readout-row">
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        )}
+
+        {dacItems.length > 0 && (
+          <article className="telemetry-card">
+            <p className="command-kicker">dacs</p>
+            <div className="readout-list">
+              {dacItems.map(([label, value]) => (
                 <div key={label} className="readout-row">
                   <span>{label}</span>
                   <strong>{value}</strong>

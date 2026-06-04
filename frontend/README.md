@@ -25,6 +25,8 @@ npm run build
 
 The production build is written to `frontend/dist` and is served by nginx on the RFSoC board.
 
+The frontend computes waveform and expected FFT previews locally in the browser. Backend calls are used to load selected DACs and to enable or disable DAC output.
+
 ## Routing / pages
 
 - `/` Dashboard (status/constants/capture quick actions)
