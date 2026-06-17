@@ -1,5 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { useAppState } from "../context/AppStateContext";
 
@@ -7,7 +6,7 @@ const navItems = [
   { to: "/signal-generator", label: "Signal generator", index: "01" },
 ];
 
-export function Layout() {
+export function Layout({ children }: { children: ReactNode }) {
   const {
     error,
     status,
@@ -118,24 +117,17 @@ export function Layout() {
         <nav className="panel nav-panel sidebar-nav">
           <p className="section-kicker">Navigation</p>
           {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                isActive ? "nav-link active" : "nav-link"
-              }
-            >
+            <div key={item.to} className="nav-link active">
               <span className="nav-index">{item.index}</span>
               <span>{item.label}</span>
-            </NavLink>
+            </div>
           ))}
         </nav>
       </aside>
 
       <section className="workspace">
         {error && <div className="error">{error}</div>}
-        <Outlet />
+        {children}
       </section>
     </main>
   );

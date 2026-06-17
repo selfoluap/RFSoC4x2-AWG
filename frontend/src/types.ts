@@ -1,11 +1,3 @@
-export interface WaveformResponse {
-  success: boolean;
-  message: string;
-  signal?: number[];
-  x_axis?: number[];
-  num_samples?: number;
-}
-
 export interface FFTResponse {
   frequencies: number[];
   magnitudes: number[];
