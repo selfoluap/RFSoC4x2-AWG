@@ -6,10 +6,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NOTEBOOK_PATH="${PYNQ_JUPYTER_NOTEBOOKS:-$HOME/jupyter_notebooks}"
 NOTEBOOK_DIR="$NOTEBOOK_PATH/rfsoc4x2-awg"
 
-if [[ "${RFSOC_AWG_WHEEL:-0}" == "1" ]]; then
-    python3 -m pip install "$REPO_ROOT"
-else
+# Default to a normal install: PYNQ/Ubuntu 22.04 often ship setuptools <64,
+# which cannot do PEP 660 editable installs for pyproject-only projects.
+if [[ "${RFSOC_AWG_EDITABLE:-0}" == "1" ]]; then
     python3 -m pip install -e "$REPO_ROOT"
+else
+    python3 -m pip install "$REPO_ROOT"
 fi
 
 USER_SITE="$(python3 -m site --user-site)"
