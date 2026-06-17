@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Literal
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException
@@ -33,14 +33,6 @@ class SimpleWaveformParams(BaseModel):
     freq_mhz: float = 250.0
     amp: int = 16383
     duty_cycle: float = Field(default=0.5, ge=0.0, le=1.0)
-
-
-class WaveformResponse(BaseModel):
-    success: bool
-    message: str
-    signal: Optional[List[float]] = None
-    x_axis: Optional[List[float]] = None
-    num_samples: Optional[int] = None
 
 
 class FFTResponse(BaseModel):
@@ -89,22 +81,6 @@ def normalize_channels(channels: List[str]) -> List[str]:
     if unsupported:
         raise ValueError(f"Unsupported DAC channel: {', '.join(unsupported)}")
     return unique_channels
-
-
-def build_waveform_response(
-    message: str,
-    hardware: HardwareService,
-    signal: np.ndarray,
-    preview_samples: int = 4000,
-) -> WaveformResponse:
-    preview_count = max(1, min(preview_samples, len(signal), len(hardware.x_axis)))
-    return WaveformResponse(
-        success=True,
-        message=message,
-        signal=signal[:preview_count].tolist(),
-        x_axis=hardware.x_axis[:preview_count].tolist(),
-        num_samples=len(signal),
-    )
 
 
 def compute_fft_for_waveform(signal: np.ndarray, dac_sr: float) -> dict[str, List[float]]:
@@ -287,14 +263,9 @@ def get_constants(hardware: HardwareService = Depends(get_hardware_service)):
     }
 
 
-hardware = hardware_service
-
-
 if __name__ == "__main__":
     import uvicorn
-    from dotenv import load_dotenv
 
-    load_dotenv()
     host = os.environ.get("RFSOC_BACKEND_HOST", "0.0.0.0")
     port = int(os.environ.get("RFSOC_BACKEND_PORT", "8001"))
     uvicorn.run(app, host=host, port=port)
