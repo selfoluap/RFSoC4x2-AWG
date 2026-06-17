@@ -37,19 +37,6 @@ def square(freq_hz, sample_rate, num_samples, amplitude=1.0, duty=0.5):
     )
 
 
-def chirp(start_hz, stop_hz, sample_rate, num_samples, amplitude=1.0, method="linear"):
-    """Generate a swept-frequency chirp."""
-    t = time_axis(num_samples, sample_rate)
-    duration = len(t) / float(sample_rate)
-    return float(amplitude) * scipy_signal.chirp(
-        t,
-        f0=float(start_hz),
-        f1=float(stop_hz),
-        t1=duration,
-        method=method,
-    )
-
-
 def serrodyne(
     ratios,
     freqs_hz,
