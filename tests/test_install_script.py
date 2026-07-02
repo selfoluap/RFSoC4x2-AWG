@@ -27,6 +27,15 @@ class InstallScriptTest(unittest.TestCase):
         self.assertIn('FIRMWARE_DIR', script)
         self.assertIn('2>/dev/null || true', script)
 
+    def test_setup_py_shim_exists_for_old_setuptools(self):
+        # PYNQ images with setuptools < 61 cannot read PEP 621 [project]
+        # metadata from pyproject.toml. The setup.py shim provides explicit
+        # metadata so those images don't install a wheel named "UNKNOWN".
+        setup_py = (ROOT / "setup.py").read_text()
+        self.assertIn("rfsoc4x2-awg", setup_py)
+        self.assertIn("find_packages", setup_py)
+        self.assertIn("firmware*", setup_py)
+
 
 if __name__ == "__main__":
     unittest.main()
