@@ -11,7 +11,20 @@ LMK_FREQ_MHZ = 245.76
 LMX_FREQ_MHZ = 491.52
 RF_CLOCK_SOURCE_INTERNAL = "internal"
 RF_CLOCK_SOURCE_EXTERNAL = "external"
-DEFAULT_BITFILE = Path(__file__).resolve().parents[1] / "overlays" / "rfsocawg.bit"
+def _find_default_bitfile():
+    """Search for the AWG bitstream in common install locations."""
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parents[1] / "overlays" / "rfsocawg.bit",  # repo root or notebook dir
+        here.parent / "overlays" / "rfsocawg.bit",       # inside installed package
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]  # fall back to first; let Overlay() raise a clear error
+
+
+DEFAULT_BITFILE = _find_default_bitfile()
 ACTIVE_DAC_TILES = 0b0101
 DAC_REF_TILE = 2
 MTS_TARGET_LATENCY_AUTO = -1

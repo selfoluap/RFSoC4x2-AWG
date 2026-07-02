@@ -1,1 +1,2 @@
 recursive-include firmware/notebooks *.ipynb
+recursive-include overlays *.bit *.hwh
