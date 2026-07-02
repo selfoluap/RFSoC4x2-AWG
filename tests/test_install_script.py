@@ -36,6 +36,15 @@ class InstallScriptTest(unittest.TestCase):
         self.assertIn("find_packages", setup_py)
         self.assertIn("firmware*", setup_py)
 
+    def test_refuses_root(self):
+        script = INSTALL_SH.read_text()
+
+        # Running as root sends all artifacts to /root where the xilinx
+        # Jupyter server cannot find them.
+        self.assertIn('EUID', script)
+        self.assertIn('do not run this script as root', script)
+        self.assertIn('su - xilinx', script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NOTEBOOK_PATH="${PYNQ_JUPYTER_NOTEBOOKS:-$HOME/jupyter_notebooks}"
 NOTEBOOK_DIR="$NOTEBOOK_PATH/rfsoc4x2-awg"
 
+# PYNQ's Jupyter server runs as the xilinx user. Running this script as
+# root sends every artifact (.pth file, notebooks, runtime files) to
+# /root where the xilinx user cannot see them. Refuse early.
+if [[ "${EUID}" -eq 0 ]]; then
+    printf 'Error: do not run this script as root.\n' >&2
+    printf 'The PYNQ Jupyter server runs as the xilinx user, so all\n' >&2
+    printf 'installed files must land in /home/xilinx, not /root.\n' >&2
+    printf '\nRun as the xilinx user instead:\n' >&2
+    printf '    su - xilinx -c "bash %s"\n' "$0" >&2
+    exit 1
+fi
+
 # Default to a normal install: PYNQ/Ubuntu 22.04 often ship setuptools <64,
 # which cannot do PEP 660 editable installs for pyproject-only projects.
 if [[ "${RFSOC_AWG_EDITABLE:-0}" == "1" ]]; then
