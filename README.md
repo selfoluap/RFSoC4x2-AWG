@@ -2,6 +2,8 @@
 
 A simple 9.8304 GSPS AWG implementation using the RFSoC 4x2 development board and the PYNQ framework.
 
+![](device.png)
+
 ## Overview
 
 - **Waveform generation**: 9.8304 GSPS DAC output with 14-bit resolution
