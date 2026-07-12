@@ -25,8 +25,8 @@ Other Vivado versions may require IP upgrades and may not reproduce the same imp
 - `build_bitstream.tcl`: top-level Vivado bitstream build entrypoint
 - `build_all.tcl`: top-level Vivado complete rebuild entrypoint
 - `scripts/settings.tcl`: project, device, path, and output settings
-- `scripts/create_project.tcl`: creates the Vivado project from source
-- `scripts/build_bitstream.tcl`: runs synthesis, implementation, and bitstream generation
+- `scripts/create_project_impl.tcl`: creates the Vivado project from source
+- `scripts/build_bitstream_impl.tcl`: runs synthesis, implementation, and bitstream generation
 - `scripts/export_artifacts.tcl`: exports the bitstream, HWH, and reports
 
 ## Build Commands
@@ -93,6 +93,6 @@ Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `rfsocawg.bit`, `rfs
 
 ## Reference Run
 
-This package has been checked against local reference run `impl_dual_dacplay_full_20260523_171856`. That run completed bitstream generation, was fully routed with 0 routing errors, and met timing with `WNS=0.054 ns` and `TNS=0.000 ns`.
+The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.054 ns` and `TNS=0.000 ns`.
 
 Use your newly generated reports as the source of truth for a fresh build.

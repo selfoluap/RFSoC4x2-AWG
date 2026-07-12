@@ -1,7 +1,7 @@
 set script_dir [file dirname [file normalize [info script]]]
 
 source [file join $script_dir scripts settings.tcl]
-source [file join $script_dir scripts create_project.tcl]
+source [file join $script_dir scripts create_project_impl.tcl]
 
 create_project_from_sources
 

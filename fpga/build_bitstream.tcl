@@ -1,7 +1,7 @@
 set script_dir [file dirname [file normalize [info script]]]
 
 source [file join $script_dir scripts settings.tcl]
-source [file join $script_dir scripts build_bitstream.tcl]
+source [file join $script_dir scripts build_bitstream_impl.tcl]
 source [file join $script_dir scripts export_artifacts.tcl]
 
 set project_file [file join $::cfg(project_dir) ${::cfg(project_name)}.xpr]
