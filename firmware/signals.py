@@ -2,39 +2,46 @@ import numpy as np
 from scipy import signal as scipy_signal
 
 
+def _to_int16(waveform):
+    limits = np.iinfo(np.int16)
+    return np.round(np.clip(waveform, limits.min, limits.max)).astype(np.int16)
+
+
 def time_axis(num_samples, sample_rate):
     """Return a time axis in seconds."""
     return np.arange(int(num_samples), dtype=float) / float(sample_rate)
 
 
 def sine(freq_hz, sample_rate, num_samples, amplitude=1.0, phase=0.0):
-    """Generate a sine wave."""
+    """Generate an int16 sine wave with amplitude in DAC-code units."""
     t = time_axis(num_samples, sample_rate)
-    return float(amplitude) * np.sin(2 * np.pi * float(freq_hz) * t + float(phase))
+    return _to_int16(float(amplitude) * np.sin(2 * np.pi * float(freq_hz) * t + float(phase)))
 
 
 def cosine(freq_hz, sample_rate, num_samples, amplitude=1.0, phase=0.0):
-    """Generate a cosine wave."""
+    """Generate an int16 cosine wave with amplitude in DAC-code units."""
     t = time_axis(num_samples, sample_rate)
-    return float(amplitude) * np.cos(2 * np.pi * float(freq_hz) * t + float(phase))
+    return _to_int16(float(amplitude) * np.cos(2 * np.pi * float(freq_hz) * t + float(phase)))
 
 
 def sawtooth(freq_hz, sample_rate, num_samples, amplitude=1.0, width=1.0):
-    """Generate a sawtooth wave using scipy.signal.sawtooth."""
+    """Generate an int16 sawtooth wave with amplitude in DAC-code units."""
     t = time_axis(num_samples, sample_rate)
-    return float(amplitude) * scipy_signal.sawtooth(
+    waveform = float(amplitude) * scipy_signal.sawtooth(
         2 * np.pi * float(freq_hz) * t,
         width=float(width),
     )
+    return _to_int16(waveform)
 
 
 def square(freq_hz, sample_rate, num_samples, amplitude=1.0, duty=0.5):
-    """Generate a square wave using scipy.signal.square."""
+    """Generate an int16 square wave with amplitude in DAC-code units."""
     t = time_axis(num_samples, sample_rate)
-    return float(amplitude) * scipy_signal.square(
+    waveform = float(amplitude) * scipy_signal.square(
         2 * np.pi * float(freq_hz) * t,
         duty=float(duty),
     )
+    return _to_int16(waveform)
 
 
 def serrodyne(
@@ -48,7 +55,10 @@ def serrodyne(
     width=1.0,
     continuous_phase=False,
 ):
-    """Generate a piecewise serrodyne sawtooth waveform."""
+    """Return (time_seconds, int16_waveform, sample_count) for serrodyne.
+
+    Amplitude is expressed in DAC-code units.
+    """
     if len(ratios) != len(freqs_hz):
         raise ValueError("ratios and frequencies must have same length")
     if total_seconds <= 0:
@@ -96,4 +106,4 @@ def serrodyne(
             y[start:end] = segment
         start = end
 
-    return x, y, n_samples
+    return x, _to_int16(y), n_samples

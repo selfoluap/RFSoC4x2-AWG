@@ -15,7 +15,7 @@ def generate_serrodyne_cached(
     amp: int,
     buf_len: int,
     dac_sr: float,
-) -> Tuple[Tuple[float, ...], Tuple[float, ...], int]:
+) -> Tuple[Tuple[float, ...], Tuple[int, ...], int]:
     T_s = T_total_us * 1e-6
     ratios = parse_ratios(ratios_str)
     freqs_hz = parse_freqs_mhz(freqs_str)
@@ -43,7 +43,7 @@ def generate_simple_waveform(
 ) -> np.ndarray:
     match waveform_type:
         case "static":
-            return np.zeros(int(buf_len), dtype=float)
+            return np.zeros(int(buf_len), dtype=np.int16)
         case "sine":
             return signals.sine(freq_hz, dac_sr, buf_len, amplitude=amp)
         case "cos":
