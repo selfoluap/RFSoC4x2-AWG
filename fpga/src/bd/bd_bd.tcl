@@ -20,7 +20,7 @@ set script_folder [_tcl::get_script_folder]
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2022.1
+set scripts_vivado_version 2024.1
 set current_vivado_version [version -short]
 
 if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
@@ -134,7 +134,7 @@ if { $bCheckIPs == 1 } {
 xilinx.com:ip:system_management_wiz:1.3\
 xilinx.com:ip:usp_rf_data_converter:2.6\
 xilinx.com:ip:xlconcat:2.1\
-xilinx.com:ip:zynq_ultra_ps_e:3.4\
+xilinx.com:ip:zynq_ultra_ps_e:3.5\
 xilinx.com:ip:util_ds_buf:2.2\
 xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
@@ -1041,7 +1041,7 @@ proc create_root_design { parentCell } {
  ] $xlconcat_0
 
   # Create instance: zynq_ultra_ps_e_0, and set properties
-  set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.4 zynq_ultra_ps_e_0 ]
+  set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.5 zynq_ultra_ps_e_0 ]
   set_property -dict [ list \
    CONFIG.CAN0_BOARD_INTERFACE {custom} \
    CONFIG.CAN1_BOARD_INTERFACE {custom} \

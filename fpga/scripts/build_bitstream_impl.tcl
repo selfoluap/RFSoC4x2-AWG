@@ -11,7 +11,7 @@ proc build_bitstream {} {
 
     create_run $::cfg(run_name) \
         -parent_run synth_1 \
-        -flow {Vivado Implementation 2022} \
+        -flow {Vivado Implementation 2024} \
         -strategy Performance_ExplorePostRoutePhysOpt \
         -constrset constrs_1
 
