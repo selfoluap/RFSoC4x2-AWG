@@ -144,6 +144,7 @@ xilinx.com:ip:zynq_ultra_ps_e:3.5\
 xilinx.com:ip:util_ds_buf:2.2\
 xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:xpm_cdc_gen:1.0\
 xilinx.com:ip:axi_gpio:2.0\
 xilinx.com:ip:xlslice:1.0\
 xilinx.com:ip:axi_bram_ctrl:4.1\
@@ -622,6 +623,8 @@ proc create_hier_cell_clocktree { parentCell nameHier } {
   create_bd_pin -dir O -type intr interrupt
   create_bd_pin -dir I -type clk s_axi_aclk
   create_bd_pin -dir O -from 0 -to 0 -type rst s_axi_aresetn
+  create_bd_pin -dir I -from 0 -to 0 PL_SYSREF
+  create_bd_pin -dir O -from 0 -to 0 UserSYSREF
 
   # Create instance: BUFG_PL_CLK, and set properties
   set BUFG_PL_CLK [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 BUFG_PL_CLK ]
@@ -684,18 +687,30 @@ proc create_hier_cell_clocktree { parentCell nameHier } {
   # Create instance: RFegressReset, and set properties
   set RFegressReset [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 RFegressReset ]
 
+  # Create instance: synchronizeSYSREF, and set properties
+  set synchronizeSYSREF [ create_bd_cell -type ip -vlnv xilinx.com:ip:xpm_cdc_gen:1.0 synchronizeSYSREF ]
+  set_property -dict [list \
+    CONFIG.CDC_TYPE {xpm_cdc_single} \
+    CONFIG.DEST_SYNC_FF {2} \
+    CONFIG.INIT_SYNC_FF {true} \
+    CONFIG.WIDTH {1} \
+  ] $synchronizeSYSREF
+
+
   # Create interface connections
   connect_bd_intf_net -intf_net control_interconnect_M07_AXI [get_bd_intf_pins s_axi_lite] [get_bd_intf_pins clkwiz/s_axi_lite]
 
   # Create port connections
   connect_bd_net -net BUFG_I_0_1 [get_bd_pins PL_CLK] [get_bd_pins BUFG_PL_CLK/BUFG_I]
+  connect_bd_net -net PL_SYSREF_1 [get_bd_pins PL_SYSREF] [get_bd_pins synchronizeSYSREF/src_in]
   connect_bd_net -net RFegressReset_peripheral_aresetn [get_bd_pins RFegressReset/peripheral_aresetn] [get_bd_pins egress_aresetn]
-  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clkwiz/clk_out1] [get_bd_pins clkRF]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clkwiz/clk_out1] [get_bd_pins clkRF] [get_bd_pins synchronizeSYSREF/dest_clk]
   connect_bd_net -net clk_wiz_0_locked [get_bd_pins clkwiz/locked] [get_bd_pins RFegressReset/dcm_locked]
   connect_bd_net -net clk_wiz_adc0_clk_out2 [get_bd_pins clkwiz/clk_out2] [get_bd_pins clkRFdiv2] [get_bd_pins RFegressReset/slowest_sync_clk]
   connect_bd_net -net clkwiz_interrupt [get_bd_pins clkwiz/interrupt] [get_bd_pins interrupt]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins PSreset_control/peripheral_aresetn] [get_bd_pins s_axi_aresetn] [get_bd_pins clkwiz/s_axi_aresetn]
-  connect_bd_net -net util_ds_buf_0_BUFG_O [get_bd_pins BUFG_PL_CLK/BUFG_O] [get_bd_pins clkwiz/clk_in1]
+  connect_bd_net -net synchronizeSYSREF_dest_out [get_bd_pins synchronizeSYSREF/dest_out] [get_bd_pins UserSYSREF]
+  connect_bd_net -net util_ds_buf_0_BUFG_O [get_bd_pins BUFG_PL_CLK/BUFG_O] [get_bd_pins clkwiz/clk_in1] [get_bd_pins synchronizeSYSREF/src_clk]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins s_axi_aclk] [get_bd_pins clkwiz/ref_clk] [get_bd_pins clkwiz/s_axi_aclk] [get_bd_pins PSreset_control/slowest_sync_clk]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins ext_reset_in] [get_bd_pins PSreset_control/ext_reset_in] [get_bd_pins RFegressReset/ext_reset_in]
 
@@ -753,6 +768,7 @@ proc create_root_design { parentCell } {
 
   # Create ports
   set PL_CLK [ create_bd_port -dir I -from 0 -to 0 -type clk -freq_hz 122880000 PL_CLK ]
+  set PL_SYSREF [ create_bd_port -dir I -from 0 -to 0 PL_SYSREF ]
 
   # Create instance: clocktree
   create_hier_cell_clocktree [current_bd_instance .] clocktree
@@ -830,12 +846,13 @@ proc create_root_design { parentCell } {
     CONFIG.Axiclk_Freq {100.0} \
     CONFIG.DAC0_Clock_Dist {0} \
     CONFIG.DAC0_Clock_Source {4} \
-    CONFIG.DAC0_Multi_Tile_Sync {false} \
+    CONFIG.DAC0_Multi_Tile_Sync {true} \
     CONFIG.DAC0_Outclk_Freq {614.400} \
     CONFIG.DAC0_PLL_Enable {true} \
     CONFIG.DAC0_Refclk_Freq {491.520} \
     CONFIG.DAC0_Sampling_Rate {9.8304} \
     CONFIG.DAC2_Clock_Dist {0} \
+    CONFIG.DAC2_Multi_Tile_Sync {true} \
     CONFIG.DAC2_Outclk_Freq {614.400} \
     CONFIG.DAC2_PLL_Enable {true} \
     CONFIG.DAC2_Refclk_Freq {491.520} \
@@ -861,6 +878,7 @@ proc create_root_design { parentCell } {
     CONFIG.DAC_Slice30_Enable {false} \
     CONFIG.DAC_Slice32_Enable {false} \
     CONFIG.DAC_VOP_Mode {0} \
+    CONFIG.PL_Clock_Freq {614.400} \
     CONFIG.RF_Analyzer {1} \
   ] $usp_rf_data_converter_1
 
@@ -1929,9 +1947,11 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
 
   # Create port connections
   connect_bd_net -net BUFG_I_0_1 [get_bd_ports PL_CLK] [get_bd_pins clocktree/PL_CLK]
+  connect_bd_net -net PL_SYSREF_1 [get_bd_ports PL_SYSREF] [get_bd_pins clocktree/PL_SYSREF]
   connect_bd_net -net RFegressReset_peripheral_aresetn [get_bd_pins clocktree/egress_aresetn] [get_bd_pins hier_dac2_play/s_axi_aresetn] [get_bd_pins hier_dac_play/s_axi_aresetn] [get_bd_pins internalRAM_interconnect/ARESETN] [get_bd_pins internalRAM_interconnect/M00_ARESETN] [get_bd_pins internalRAM_interconnect/M01_ARESETN] [get_bd_pins usp_rf_data_converter_1/s0_axis_aresetn] [get_bd_pins usp_rf_data_converter_1/s2_axis_aresetn]
   connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clocktree/clkRF] [get_bd_pins hier_dac2_play/aclk] [get_bd_pins hier_dac_play/aclk] [get_bd_pins usp_rf_data_converter_1/s0_axis_aclk] [get_bd_pins usp_rf_data_converter_1/s2_axis_aclk]
   connect_bd_net -net clk_wiz_adc0_clk_out2 [get_bd_pins clocktree/clkRFdiv2] [get_bd_pins gpio_control/dest_clk] [get_bd_pins hier_dac2_play/axis_clk] [get_bd_pins hier_dac_play/axis_clk] [get_bd_pins internalRAM_interconnect/ACLK] [get_bd_pins internalRAM_interconnect/M00_ACLK] [get_bd_pins internalRAM_interconnect/M01_ACLK]
+  connect_bd_net -net clocktree_UserSYSREF [get_bd_pins clocktree/UserSYSREF] [get_bd_pins usp_rf_data_converter_1/user_sysref_dac]
   connect_bd_net -net clocktree_interrupt [get_bd_pins clocktree/interrupt] [get_bd_pins xlconcat_0/In1]
   connect_bd_net -net gpio_control_dac0_sample_count1 [get_bd_pins gpio_control/dac0_sample_count] [get_bd_pins hier_dac_play/sample_count]
   connect_bd_net -net gpio_control_dac2_enable1 [get_bd_pins gpio_control/dac2_enable] [get_bd_pins hier_dac2_play/enable]

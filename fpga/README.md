@@ -93,6 +93,6 @@ Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `rfsocawg.bit`, `rfs
 
 ## Reference Run
 
-The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.046 ns` and `TNS=0.000 ns`.
+The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.059 ns` and `TNS=0.000 ns`.
 
 Use your newly generated reports as the source of truth for a fresh build.

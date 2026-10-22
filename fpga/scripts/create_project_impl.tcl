@@ -62,6 +62,12 @@ proc validate_current_design {} {
         [get_property CONFIG.ADC2_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
     require_equal "RFDC ADC3 disabled" \
         [get_property CONFIG.ADC3_Enable [get_bd_cells /usp_rf_data_converter_1]] "0"
+    require_equal "RFDC DAC0 multi-tile sync" \
+        [get_property CONFIG.DAC0_Multi_Tile_Sync [get_bd_cells /usp_rf_data_converter_1]] "true"
+    require_equal "RFDC DAC2 multi-tile sync" \
+        [get_property CONFIG.DAC2_Multi_Tile_Sync [get_bd_cells /usp_rf_data_converter_1]] "true"
+    require_equal "RFDC PL clock frequency" \
+        [get_property CONFIG.PL_Clock_Freq [get_bd_cells /usp_rf_data_converter_1]] "614.400"
 
     require_equal "control interconnect master count" \
         [get_property CONFIG.NUM_MI [get_bd_cells /control_interconnect]] "5"
@@ -80,14 +86,14 @@ proc validate_current_design {} {
     require_connected "DAC0 sample_count" [get_bd_pins /hier_dac_play/sample_count]
     require_connected "DAC2 sample_count" [get_bd_pins /hier_dac2_play/sample_count]
     require_connected "DAC2 RFDC stream" [get_bd_intf_pins /usp_rf_data_converter_1/s20_axis]
+    require_connected "PL_SYSREF fabric port" [get_bd_ports PL_SYSREF]
+    require_connected "SYSREF synchronizer output" [get_bd_pins /clocktree/synchronizeSYSREF/dest_out]
+    require_connected "RFDC DAC user SYSREF" [get_bd_pins /usp_rf_data_converter_1/user_sysref_dac]
 
     require_absent "ADC2 clock input port" [get_bd_intf_ports -quiet adc2_clk]
     require_absent "ADC analog input ports" [get_bd_intf_ports -quiet {vin0_01 vin0_23 vin1_01 vin2_01 vin2_23}]
     require_absent "Unused DAC vout10 port" [get_bd_intf_ports -quiet vout10]
-    require_absent "PL_SYSREF fabric port" [get_bd_ports -quiet PL_SYSREF]
-    require_absent "clocktree UserSYSREF pin" [get_bd_pins -quiet /clocktree/UserSYSREF]
     require_absent "clocktree bus_struct_reset pin" [get_bd_pins -quiet /clocktree/bus_struct_reset]
-    require_absent "ADC fabric SYSREF synchronizer" [get_bd_cells -quiet /clocktree/synchronizeSYSREF]
     require_absent "extra control interconnect master ports" [get_bd_intf_pins -quiet {/control_interconnect/M05_AXI /control_interconnect/M06_AXI}]
     require_absent "extra internal RAM interconnect master ports" [get_bd_intf_pins -quiet {/internalRAM_interconnect/M02_AXI /internalRAM_interconnect/M03_AXI /internalRAM_interconnect/M04_AXI /internalRAM_interconnect/M05_AXI}]
 }
