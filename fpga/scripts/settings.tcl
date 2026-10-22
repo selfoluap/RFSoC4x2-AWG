@@ -1,11 +1,11 @@
 set ::cfg(repo_root) [file normalize [file join [file dirname [info script]] ..]]
-set ::cfg(vivado_version) "2022.1"
+set ::cfg(vivado_version) "2024.1"
 set ::cfg(project_name) "rfsocawg"
 set ::cfg(part) "xczu48dr-fsvg1517-2-e"
 set ::cfg(board_part) "xilinx.com:zcu208:part0:2.0"
 set ::cfg(top) "bd_wrapper"
 set ::cfg(bd_name) "bd"
-set ::cfg(jobs) 12
+set ::cfg(jobs) 3
 
 set ::cfg(build_root) [file join $::cfg(repo_root) build]
 set ::cfg(project_dir) [file join $::cfg(build_root) vivado]

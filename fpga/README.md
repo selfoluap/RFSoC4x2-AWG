@@ -5,7 +5,7 @@ This folder contains a self-contained Vivado Tcl build flow for recreating the p
 ## Tested For
 
 - Board: RFSoC4x2 / ZCU208
-- Vivado: 2022.1
+- Vivado: 2024.1
 - Part: `xczu48dr-fsvg1517-2-e`
 - Board part: `xilinx.com:zcu208:part0:2.0`
 
@@ -43,7 +43,7 @@ Then build the bitstream:
 ./build_bitstream.sh
 ```
 
-On Windows, using a Vivado 2022.1 command prompt:
+On Windows, using a Vivado 2024.1 command prompt:
 
 ```bat
 create_project.bat
@@ -93,6 +93,6 @@ Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `rfsocawg.bit`, `rfs
 
 ## Reference Run
 
-The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.054 ns` and `TNS=0.000 ns`.
+The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.046 ns` and `TNS=0.000 ns`.
 
 Use your newly generated reports as the source of truth for a fresh build.
