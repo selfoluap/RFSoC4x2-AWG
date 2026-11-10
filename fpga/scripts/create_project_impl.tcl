@@ -19,12 +19,28 @@ proc create_project_from_sources {} {
 
     add_files -fileset sources_1 $::cfg(rtl_files)
     add_files -fileset constrs_1 $::cfg(xdc_file)
+    if {$::cfg(enable_ddr4)} {
+        foreach rtl_file $::cfg(ddr4_rtl_files) {
+            require_file "DDR4 player RTL source" $rtl_file
+        }
+        require_file "DDR4 player XDC constraints" $::cfg(ddr4_xdc_file)
+        require_file "DDR4 player block design Tcl" $::cfg(ddr4_bd_tcl_file)
+        add_files -fileset sources_1 $::cfg(ddr4_rtl_files)
+        add_files -fileset constrs_1 $::cfg(ddr4_xdc_file)
+    }
     update_compile_order -fileset sources_1
 
     source $::cfg(bd_tcl_file)
     open_bd_design [get_files [format "*/%s.bd" $::cfg(bd_name)]]
 
     validate_current_design
+    if {$::cfg(enable_ddr4)} {
+        # added after the reference design has passed its own checks
+        source $::cfg(ddr4_bd_tcl_file)
+        add_ddr4_player
+        validate_bd_design
+        save_bd_design
+    }
     generate_target all [get_files [format "*/%s.bd" $::cfg(bd_name)]]
     export_ip_user_files -of_objects [get_files [format "*/%s.bd" $::cfg(bd_name)]] -no_script -sync -force -quiet
     make_wrapper -files [get_files [format "*/%s.bd" $::cfg(bd_name)]] -top -import -force

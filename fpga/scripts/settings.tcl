@@ -22,6 +22,18 @@ set ::cfg(rtl_files) [list \
 set ::cfg(xdc_file) [file join $::cfg(repo_root) src constraints bd.xdc]
 set ::cfg(bd_tcl_file) [file join $::cfg(repo_root) src bd bd_bd.tcl]
 
+# Optional PL DDR4 long-waveform player: build with RFSOC_AWG_DDR4=1 in the environment.
+# Off by default, so the reference bitstream is reproduced unchanged. See DDR4_PLAYER.md.
+set ::cfg(enable_ddr4) [expr {[info exists ::env(RFSOC_AWG_DDR4)] && $::env(RFSOC_AWG_DDR4) eq "1"}]
+set ::cfg(ddr4_rtl_files) [list \
+    [file join $::cfg(repo_root) src rtl awg_async_fifo.v] \
+    [file join $::cfg(repo_root) src rtl DDR4Streamer.v] \
+    [file join $::cfg(repo_root) src rtl DacSourceMux.v] \
+    [file join $::cfg(repo_root) src rtl DDR4Player.v] \
+]
+set ::cfg(ddr4_xdc_file) [file join $::cfg(repo_root) src constraints ddr4_pl.xdc]
+set ::cfg(ddr4_bd_tcl_file) [file join $::cfg(repo_root) src bd add_ddr4_player.tcl]
+
 proc require_vivado_version {} {
     set actual [version -short]
     if {[string first $::cfg(vivado_version) $actual] == -1} {

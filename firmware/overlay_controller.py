@@ -144,6 +144,11 @@ class OverlayController(Overlay):
         self.dac0.disable()
         self.dac2.disable()
 
+        # Long-waveform players; empty unless the bitstream was built with the PL DDR4.
+        from .ddr4_player import attach as _attach_ddr4_players
+
+        self.ddr4 = _attach_ddr4_players(self)
+
     def info(self):
         return {
             "bitfile": self.bitfile_path,

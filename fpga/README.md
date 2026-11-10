@@ -96,3 +96,9 @@ Expected exported files include `bd_wrapper.bit`, `bd.hwh`, `rfsocawg.bit`, `rfs
 The completed local reference run was fully routed with 0 routing errors, and met timing with `WNS=0.059 ns` and `TNS=0.000 ns`.
 
 Use your newly generated reports as the source of truth for a fresh build.
+
+## Optional: PL DDR4 long-waveform player
+
+Building with `RFSOC_AWG_DDR4=1` in the environment adds the PL DDR4 controller and a DDR4 player
+per DAC (1.75 s at 1228.8 MS/s input rate, 3.5 s at 614.4 MS/s). It is off by default and has not
+been built or tested on hardware yet. See [DDR4_PLAYER.md](DDR4_PLAYER.md).
