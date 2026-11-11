@@ -237,3 +237,98 @@ def test_attach_is_a_no_op_without_ddr4():
         mem_dict = {"hier_dac_play/axi_bram_ctrl_0": {}}
 
     assert dp.attach(Overlay()) == {}
+
+
+# ---------------------------------------------------------------------------- full-rate modes
+def unpack(stream: np.ndarray, bits: int, count: int) -> np.ndarray:
+    """Reference decoder, written independently of pack_samples: what the FPGA does."""
+    value = int.from_bytes(stream.tobytes(), "little")
+    out = np.empty(count, dtype=np.int16)
+    for i in range(count):
+        code = (value >> (bits * i)) & ((1 << bits) - 1)
+        out[i] = np.array(code << (16 - bits), dtype=np.uint16).view(np.int16)
+    return out
+
+
+def test_full_rate_capacity_is_a_few_hundred_milliseconds():
+    four_gib_bits = (4 << 30) * 8
+    assert four_gib_bits // 14 / dp.input_rate(1) == pytest.approx(0.2497, abs=1e-3)
+    assert four_gib_bits // 12 / dp.input_rate(1) == pytest.approx(0.2913, abs=1e-3)
+    assert four_gib_bits // 8 / dp.input_rate(1) == pytest.approx(0.4369, abs=1e-3)
+    assert dp.usable_bandwidth(1) == pytest.approx(4915.2e6)
+
+
+@pytest.mark.parametrize("bits", [14, 12, 8])
+def test_pack_samples_round_trips_through_the_fpga_format(bits):
+    rng = np.random.default_rng(bits)
+    data = rng.integers(-32768, 32768, size=4096, dtype=np.int16)
+    data[:4] = [32767, -32768, 0, -1]
+    decoded = unpack(dp.pack_samples(data, bits), bits, data.size)
+    step = 1 << (16 - bits)
+    if bits == 14:
+        assert np.array_equal(decoded, data & ~np.int16(step - 1))   # top 14 bits, exactly
+    else:
+        error = decoded.astype(np.int32) - data
+        assert np.all(np.abs(error) <= step // 2) or np.all(error[data > 32767 - step] <= 0)
+        assert np.abs(error[data <= 32767 - step]).max() <= step // 2
+        assert decoded.max() <= 32767 - step + 1 and decoded.min() == -32768
+
+
+@pytest.mark.parametrize("bits,words_per_group", [(14, 7), (12, 3), (8, 1)])
+def test_full_rate_load_packs_pads_to_whole_groups_and_handles_odd_chunks(bits, words_per_group):
+    player, _, memory, _ = make_player(region_start=4096)
+    player.set_full_rate(bits)
+    rng = np.random.default_rng(1)
+    data = rng.integers(-32768, 32768, size=1001, dtype=np.int16)
+    chunks = [data[:3], data[3:10], data[10:513], data[513:]]      # not multiples of 4
+    segment = player.load(iter(chunks))
+
+    group = dp.GROUP_SAMPLES[bits]
+    padded = -(-1001 // group) * group
+    assert segment.bits == bits and segment.num_samples == 1001 and segment.base_page == 1
+    assert segment.padded_samples == padded
+    assert segment.num_words % words_per_group == 0
+    assert segment.num_words == padded * bits // 512
+
+    stored = memory.view(np.uint8)[4096 : 4096 + segment.num_words * 64]
+    decoded = unpack(stored, bits, padded)
+    reference = unpack(dp.pack_samples(np.resize(data, 1004)[:1004], bits), bits, 1004)[:1001]
+    assert np.array_equal(decoded[:1001], reference)
+    assert np.all(decoded[1001:] == 0)
+    assert memory.view(np.uint8)[4096 + segment.num_words * 64] == 0x77, "wrote past the segment"
+
+
+def test_set_full_rate_configures_rfdc_and_mode_bits():
+    player, hardware, _, block = make_player()
+    player.set_interpolation(8)
+    player.set_full_rate(12)
+    assert block.InterpolationFactor == 1 and block.FabWrVldWords == 16
+    assert hardware.ctrl & dp.CTRL_FULL_RATE and hardware.ctrl & dp.CTRL_SOURCE_DDR4
+    assert (hardware.ctrl & dp.CTRL_RATE_MASK) >> dp.CTRL_RATE_SHIFT == 1
+    assert player.max_duration() == pytest.approx((1 << 20) * 8 // 12 / 9.8304e9)
+    player.load(np.ones(128, dtype=np.int16))
+    player.play(loops=2)
+    assert hardware.ctrl & dp.CTRL_FULL_RATE and hardware.ctrl >> dp.CTRL_LOOPS_SHIFT == 2
+    assert player.wait_done()["buffer_low_water"] == 1900
+    player.set_interpolation(4)
+    assert not hardware.ctrl & dp.CTRL_FULL_RATE
+    with pytest.raises(ValueError):
+        player.set_full_rate(16)
+
+
+def test_segment_from_another_mode_is_rejected():
+    player, _, _, _ = make_player()
+    player.set_interpolation(8)
+    segment = player.load(np.ones(64, dtype=np.int16))
+    player.set_full_rate(14)
+    with pytest.raises(dp.Ddr4PlayerError, match="load"):
+        player.arm(segment)
+
+
+def test_full_rate_load_respects_the_region():
+    player, _, _, _ = make_player(region_bytes=4096)
+    player.set_full_rate(14)
+    assert player.capacity_samples == 4096 * 8 // 14
+    with pytest.raises(ValueError, match="exceeds"):
+        player.load(np.zeros(2400, dtype=np.int16))
+    assert player.load(np.zeros(2304, dtype=np.int16)).num_words == 63

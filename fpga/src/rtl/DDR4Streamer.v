@@ -20,25 +20,39 @@
 // With RFDC interpolation N the converter only takes the low 16/N samples of each beat, so the
 // gearbox places 16/N samples in the low end of each 256-bit half:
 //
-//   rate_sel   RFDC interpolation   DAC input rate   samples per axis_clk cycle   cycles per FIFO word
+//   mode       RFDC interpolation   DAC input rate   samples per axis_clk cycle   cycles per FIFO word
 //      0              2x             4915.2 MS/s               16                        2
 //      1              4x             2457.6 MS/s                8                        4
 //      2              8x             1228.8 MS/s                4                        8
 //      3             16x              614.4 MS/s                2                       16
+//
+// Full-rate modes (mode[2] = 1, RFDC interpolation 1x, DAC input rate 9830.4 MS/s). The DDR4
+// cannot deliver 16-bit samples at this rate (307.2 M words/s needed, 300 M words/s is the
+// controller's absolute maximum), so samples are stored bit-packed, B bits each, as one
+// little-endian bit stream, and unpacked here to MSB-aligned 16-bit samples:
+//
+//   mode   stored bits   FIFO words per 8 cycles   DDR4 read load   share of DDR4 peak
+//    4         14                  7                17.2 GB/s            89.6 %
+//    5         12                  6                14.7 GB/s            76.8 %
+//    6          8                  4                 9.8 GB/s            51.2 %
+//
+// The waveform length must be a whole number of groups (7, 3 or 1 words = 256, 128 or 64
+// samples). Whether mode 4 keeps up depends on the sustained read rate of the real DDR4
+// controller: read the low-water mark in the status word.
 //
 // Control inputs are quasi-static levels (AXI GPIO). They must be stable before `enable` rises.
 //   enable       1 = arm: reader starts prefetching.  0 = abort / idle (hold low >= 1 ms).
 //   sw_trigger   rising edge starts playback once status `ready` is set.
 //   ext_trigger  rising edge starts playback when ext_trig_en = 1 (asynchronous pin is fine).
 //
-// Trigger to first sample is a fixed number of axis_clk cycles because the data is already
-// waiting in the FIFO; the only uncertainty is the one-cycle trigger synchroniser.
+// Trigger to first sample is a fixed number of axis_clk cycles (one more in the full-rate modes)
+// because the data is already waiting in the FIFO; the only uncertainty is the one-cycle trigger synchroniser.
 // -------------------------------------------------------------------------------------------------
 `timescale 1ns / 1ps
 
 module DDR4Streamer #(
   parameter integer ADDR_WIDTH  = 33,     // RFSoC4x2 PL DDR4 MIG AXI address width
-  parameter integer FIFO_AW     = 11,     // short buffer depth = 2**FIFO_AW 64-byte words (2048 = 131 KiB)
+  parameter integer FIFO_AW     = 12,     // short buffer depth = 2**FIFO_AW 64-byte words (4096 = 262 KiB)
   parameter integer BURST_BEATS = 64,     // 64 beats x 64 bytes = 4 KiB, never crosses a 4 KiB boundary
   parameter integer MARGIN      = 16      // FIFO words kept free as slack
 ) (
@@ -81,7 +95,8 @@ module DDR4Streamer #(
   input  wire                    ext_trigger,
   input  wire                    ext_trig_en,
   input  wire                    loop_forever,
-  input  wire [1:0]              rate_sel,
+  input  wire [2:0]              mode,           // 0-3: 2x/4x/8x/16x interpolation, 16-bit samples
+                                                 // 4-6: full rate, 14/12/8-bit packed samples
   input  wire [23:0]             loop_count,     // number of passes, 0 is treated as 1
   input  wire [ADDR_WIDTH-13:0]  base_page,      // start address / 4096
   input  wire [27:0]             num_words,      // waveform length in 64-byte words
@@ -95,7 +110,10 @@ module DDR4Streamer #(
   //  [5] read_error  sticky: DDR4 AXI read returned an error response
   //  [6] trig_early  sticky: a trigger arrived before `ready`
   //  [7] armed       DAC side out of reset
-  //  [16+FIFO_AW:16]  short-buffer fill level seen by the DAC side (debug, not sampled coherently)
+  //  [16+FIFO_AW:16]  low-water mark: lowest short-buffer fill level between the end of the
+  //                   prefill and the last read request (the buffer drains by design after
+  //                   that). Measured on the DDR4 side, so it can read a few words high.
+  //                   Held until the next arm; all ones = nothing measured.
   output wire [31:0]             status
 );
 
@@ -157,6 +175,8 @@ module DDR4Streamer #(
   reg                   wrun_q       = 1'b0;   // level to the DAC side: FIFO write side is live
   reg                   ready_q      = 1'b0;   // level to the DAC side: prefill reached
   reg                   busy_q       = 1'b0;
+  reg                   prefilled    = 1'b0;   // prefill level reached at least once since arming
+  reg [FIFO_AW:0]       low_water    = {(FIFO_AW+1){1'b1}};
 
   wire        ar_hs    = arvalid_r && m_axi_arready;
   wire        r_beat   = m_axi_rvalid && m_axi_rready;
@@ -196,6 +216,13 @@ module DDR4Streamer #(
     if (r_beat && m_axi_rresp[1])
       rd_err_q <= 1'b1;
 
+    if (wstate == W_RUN && !final_issued) begin
+      if (fifo_wr_fill >= PREFILL[FIFO_AW:0])
+        prefilled <= 1'b1;
+      if (prefilled && fifo_wr_fill < low_water)
+        low_water <= fifo_wr_fill;
+    end
+
     if (!m_axi_aresetn) begin
       wstate       <= W_IDLE;
       idle_cnt     <= 5'd0;
@@ -224,6 +251,8 @@ module DDR4Streamer #(
             outstanding  <= {CW{1'b0}};
             gap          <= 2'd3;
             rd_err_q     <= 1'b0;
+            prefilled    <= 1'b0;
+            low_water    <= {(FIFO_AW+1){1'b1}};
             wstate       <= W_RUN;
           end
         end
@@ -302,12 +331,21 @@ module DDR4Streamer #(
   reg          last_r       = 1'b0;
   reg          underflow_q  = 1'b0;
   reg          trig_early_q = 1'b0;
+  reg [2:0]    ph           = 3'd0;    // full-rate modes: position inside the 8/4/2 cycle group
+  reg [447:0]  pk           = 448'd0;  // full-rate modes: packed samples of one cycle
+  reg          pk_v         = 1'b0;
+
+  wire         full_rate  = mode[2];
+  wire [1:0]   rate_sel = mode[1:0];
+  wire [2:0]   ph_last = (mode[1:0] == 2'd0) ? 3'd7 : (mode[1:0] == 2'd1) ? 3'd3 : 3'd1;
+  wire         pk_pull = (ph != ph_last);   // this cycle needs a new FIFO word
 
   wire rd_active = en_r2 && wrun_r2 && (hold == 7'd0);
   wire trig      = (swt_r2 && !swt_r3) || (ext_trig_en && ext_r2 && !ext_r3);
 
   assign fifo_rd_rst  = !rd_active;
-  assign fifo_rd_take = (rstate == R_RUN) && m_axis_tready && (cnt == 4'd0) && fifo_rd_valid;
+  assign fifo_rd_take = (rstate == R_RUN) && m_axis_tready && fifo_rd_valid &&
+                        (full_rate ? pk_pull : (cnt == 4'd0));
 
   // samples for this cycle: half go to the low end of tdata[255:0], half to tdata[511:256]
   function [511:0] gear;
@@ -348,6 +386,40 @@ module DDR4Streamer #(
     end
   endfunction
 
+  // Full-rate modes. The stored bit stream is consumed 32*B bits per cycle. In cycle k of a group
+  // the first k*(512 - 32*B) bits are left over from the previous word, the rest comes from a
+  // new word; in the last cycle of a group everything is left over and no word is taken.
+  function [447:0] pack;
+    input [511:0] nw;        // new FIFO word
+    input [511:0] pv;        // previous FIFO word
+    input [1:0]   sel;
+    input [2:0]   k;
+    reg   [1023:0] cat;
+    begin
+      cat = {nw, pv};
+      case (sel)
+        2'd0:    pack = cat[(512 - 64  * k)      +: 448];
+        2'd1:    pack = {64'd0,  cat[(512 - 128 * k[1:0]) +: 384]};
+        default: pack = {192'd0, cat[(512 - 256 * k[0])   +: 256]};
+      endcase
+    end
+  endfunction
+
+  // B-bit two's complement samples -> 32 MSB-aligned 16-bit samples
+  function [511:0] expand;
+    input [447:0] x;
+    input [1:0]   sel;
+    integer i;
+    begin
+      for (i = 0; i < 32; i = i + 1)
+        case (sel)
+          2'd0:    expand[16*i +: 16] = {x[14*i +: 14], 2'd0};
+          2'd1:    expand[16*i +: 16] = {x[12*i +: 12], 4'd0};
+          default: expand[16*i +: 16] = {x[8*i  +: 8],  8'd0};
+        endcase
+    end
+  endfunction
+
   always @(posedge axis_clk) begin
     en_r1    <= enable;
     en_r2    <= en_r1;
@@ -376,6 +448,8 @@ module DDR4Streamer #(
       underflow_q  <= 1'b0;
       trig_early_q <= 1'b0;
       m_axis_tdata <= 512'd0;
+      ph           <= 3'd0;
+      pk_v         <= 1'b0;
     end else begin
       case (rstate)
         R_WAIT: begin
@@ -389,11 +463,28 @@ module DDR4Streamer #(
           if (trig) begin
             rstate <= R_RUN;
             cnt    <= 4'd0;
+            ph     <= 3'd0;
           end
         end
 
         R_RUN: begin
-          if (m_axis_tready) begin
+          if (m_axis_tready && full_rate) begin
+            if (pk_pull && !fifo_rd_valid) begin
+              // short buffer ran dry: one cycle of mid-scale, the group resumes where it stopped
+              pk_v        <= 1'b0;
+              underflow_q <= 1'b1;
+            end else begin
+              pk   <= pack(fifo_rd_data[511:0], sh, mode[1:0], ph);
+              pk_v <= 1'b1;
+              if (pk_pull) begin
+                sh     <= fifo_rd_data[511:0];
+                last_r <= fifo_rd_data[512];
+              end
+              ph <= pk_pull ? ph + 3'd1 : 3'd0;
+              if (!pk_pull && last_r)
+                rstate <= R_DONE;
+            end
+          end else if (m_axis_tready) begin
             if (cnt == 4'd0) begin
               if (fifo_rd_valid) begin
                 m_axis_tdata <= gear(fifo_rd_data[511:0], rate_sel);
@@ -416,15 +507,22 @@ module DDR4Streamer #(
         end
 
         default: begin   // R_DONE
-          if (m_axis_tready)
-            m_axis_tdata <= 512'd0;
+          if (m_axis_tready) begin
+            pk_v <= 1'b0;
+            if (!full_rate)
+              m_axis_tdata <= 512'd0;
+          end
         end
       endcase
+
+      // full-rate modes: second pipeline stage, unpack to 16-bit samples
+      if (full_rate && m_axis_tready)
+        m_axis_tdata <= pk_v ? expand(pk, mode[1:0]) : 512'd0;
     end
   end
 
   // ================================================================ status
-  assign status = {{(15-FIFO_AW){1'b0}}, fifo_rd_fill, 8'd0,
+  assign status = {{(15-FIFO_AW){1'b0}}, low_water, 8'd0,
                    rd_active, trig_early_q, rd_err_q, underflow_q,
                    (rstate == R_DONE)  && rd_active,
                    (rstate == R_RUN)   && rd_active,

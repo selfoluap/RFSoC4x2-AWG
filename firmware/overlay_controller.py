@@ -149,6 +149,15 @@ class OverlayController(Overlay):
 
         self.ddr4 = _attach_ddr4_players(self)
 
+    def attach_ddr4(self, split=(0.5, 0.5)):
+        """Re-divide the PL DDR4 between DAC0 and DAC2, e.g. ``(1.0, 0.0)`` for full rate."""
+        from .ddr4_player import attach as _attach_ddr4_players
+
+        for player in self.ddr4.values():
+            player.stop()
+        self.ddr4 = _attach_ddr4_players(self, split=split)
+        return self.ddr4
+
     def info(self):
         return {
             "bitfile": self.bitfile_path,

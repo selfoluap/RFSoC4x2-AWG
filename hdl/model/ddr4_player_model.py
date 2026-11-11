@@ -37,6 +37,25 @@ def memory_word(word_index: int) -> int:
     return value
 
 
+#: full-rate modes: mode -> (stored bits per sample, cycles per group, FIFO words per group)
+PACKED_MODES = {4: (14, 8, 7), 5: (12, 4, 3), 6: (8, 2, 1)}
+MASK448 = (1 << 448) - 1
+
+
+def pack(nw: int, pv: int, sel: int, k: int) -> int:
+    bits = PACKED_MODES[4 + sel][0]
+    cat = (nw << 512) | pv
+    return (cat >> (512 - (512 - 32 * bits) * k)) & ((1 << (32 * bits)) - 1)
+
+
+def expand(x: int, sel: int) -> int:
+    bits = PACKED_MODES[4 + sel][0]
+    out = 0
+    for i in range(32):
+        out |= (((x >> (bits * i)) & ((1 << bits) - 1)) << (16 - bits)) << (16 * i)
+    return out
+
+
 def gray(x: int) -> int:
     return x ^ (x >> 1)
 
@@ -67,7 +86,7 @@ class Controls:
     ext_trigger: int = 0
     ext_trig_en: int = 0
     loop_forever: int = 0
-    rate_sel: int = 2
+    mode: int = 2
     loop_count: int = 1
     base_page: int = 0
     num_words: int = 0
@@ -236,6 +255,8 @@ class DDR4StreamerModel:
         self.arlen_r = 0
         self.rd_err_q = 0
         self.wrun_q = self.ready_q = self.busy_q = 0
+        self.prefilled = 0
+        self.low_water = (1 << (fifo_aw + 1)) - 1
 
         # player (axis_clk domain)
         self.en_r1 = self.en_r2 = 0
@@ -251,6 +272,9 @@ class DDR4StreamerModel:
         self.underflow_q = self.trig_early_q = 0
         self.m_axis_tdata = 0
         self.m_axis_tvalid = 0
+        self.ph = 0
+        self.pk = 0
+        self.pk_v = 0
 
         # instrumentation only (not in the RTL)
         self.tdata_is_data = 0
@@ -276,6 +300,7 @@ class DDR4StreamerModel:
             "read_error": self.rd_err_q,
             "trig_early": self.trig_early_q,
             "armed": active,
+            "low_water": self.low_water,
         }
 
     # ------------------------------------------------------------------ m_axi_aclk edge
@@ -307,6 +332,11 @@ class DDR4StreamerModel:
         self.outstanding = outstanding + (self.pend_len if ar_hs else 0) - (1 if r_beat else 0)
         if r_beat and (rresp & 2):
             self.rd_err_q = 1
+        if wstate == W_RUN and not final_issued:
+            if wr_fill >= self.PREFILL:
+                self.prefilled = 1
+            if self.prefilled and wr_fill < self.low_water:
+                self.low_water = wr_fill
 
         if not aresetn:
             self.wstate = W_IDLE
@@ -328,6 +358,8 @@ class DDR4StreamerModel:
                 self.outstanding = 0
                 self.gap = 3
                 self.rd_err_q = 0
+                self.prefilled = 0
+                self.low_water = (1 << (self.FIFO_AW + 1)) - 1
                 self.wstate = W_RUN
         elif wstate == W_RUN:
             if gap != 0:
@@ -371,10 +403,17 @@ class DDR4StreamerModel:
         rstate, cnt, sh, last_r = self.rstate, self.cnt, self.sh, self.last_r
         rd_active = self.rd_active
         trig = (self.swt_r2 and not self.swt_r3) or (c.ext_trig_en and self.ext_r2 and not self.ext_r3)
-        sel = c.rate_sel
+        full_rate = c.mode >> 2
+        sel = c.mode & 3
+        ph, pk, pk_v = self.ph, self.pk, self.pk_v
+        ph_last = 7 if sel == 0 else 3 if sel == 1 else 1
+        pk_pull = ph != ph_last
         rd_valid, rd_data = f.rd_valid, f.rd_data
+        rd_fill = f.rd_fill
         fifo_rd_rst = int(not rd_active)
-        fifo_rd_take = int(rstate == R_RUN and tready and cnt == 0 and rd_valid)
+        fifo_rd_take = int(
+            rstate == R_RUN and tready and rd_valid and (pk_pull if full_rate else cnt == 0)
+        )
 
         en_r2 = self.en_r2
         self.en_r1, self.en_r2 = c.enable, self.en_r1
@@ -397,6 +436,8 @@ class DDR4StreamerModel:
             self.underflow_q = self.trig_early_q = 0
             self.m_axis_tdata = 0
             self.tdata_is_data = 0
+            self.ph = 0
+            self.pk_v = 0
         elif rstate == R_WAIT:
             if trig:
                 self.trig_early_q = 1
@@ -406,8 +447,22 @@ class DDR4StreamerModel:
             if trig:
                 self.rstate = R_RUN
                 self.cnt = 0
+                self.ph = 0
         elif rstate == R_RUN:
-            if tready:
+            if tready and full_rate:
+                if pk_pull and not rd_valid:
+                    self.pk_v = 0
+                    self.underflow_q = 1
+                else:
+                    self.pk = pack(rd_data & MASK512, sh, sel, ph)
+                    self.pk_v = 1
+                    if pk_pull:
+                        self.sh = rd_data & MASK512
+                        self.last_r = (rd_data >> 512) & 1
+                    self.ph = ph + 1 if pk_pull else 0
+                    if not pk_pull and last_r:
+                        self.rstate = R_DONE
+            elif tready:
                 if cnt == 0:
                     if rd_valid:
                         self.m_axis_tdata = gear(rd_data & MASK512, sel)
@@ -428,8 +483,14 @@ class DDR4StreamerModel:
                         self.rstate = R_DONE
         else:
             if tready:
-                self.m_axis_tdata = 0
-                self.tdata_is_data = 0
+                self.pk_v = 0
+                if not full_rate:
+                    self.m_axis_tdata = 0
+                    self.tdata_is_data = 0
+
+        if aresetn and rd_active and full_rate and tready:
+            self.m_axis_tdata = expand(pk, sel) if pk_v else 0
+            self.tdata_is_data = pk_v
 
         f.rd_tick(fifo_rd_rst, fifo_rd_take)
 
@@ -472,7 +533,7 @@ class Bench:
                 if self.first_data_cycle is None:
                     self.first_data_cycle = self.axis_cycles
                 if self.record:
-                    per_cycle = RATE_MODES[dut.ctl.rate_sel][1]
+                    per_cycle = 32 if dut.ctl.mode >> 2 else RATE_MODES[dut.ctl.mode][1]
                     for half in (dut.m_axis_tdata & MASK256, dut.m_axis_tdata >> 256):
                         for i in range(per_cycle // 2):
                             self.samples.append((half >> (16 * i)) & 0xFFFF)
@@ -496,6 +557,19 @@ class Bench:
                 return True
             self.step()
         return predicate()
+
+
+def expected_packed_samples(base_page: int, num_words: int, passes: int, mode: int) -> list[int]:
+    """What a full-rate mode must play: the memory read as a stream of B-bit samples."""
+    bits = PACKED_MODES[mode][0]
+    first = (base_page << 12) // 64
+    stream = 0
+    for i in range(num_words):
+        stream |= memory_word(first + i) << (512 * i)
+    count = num_words * 512 // bits
+    mask = (1 << bits) - 1
+    one = [((stream >> (bits * i)) & mask) << (16 - bits) for i in range(count)]
+    return one * passes
 
 
 def expected_samples(base_page: int, num_words: int, passes: int) -> list[int]:

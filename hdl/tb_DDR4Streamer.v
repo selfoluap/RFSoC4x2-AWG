@@ -19,7 +19,7 @@ module tb_DDR4Streamer;
   localparam integer FIFO_AW    = 10;
   localparam integer LATENCY    = 24;     // AR accepted -> first R beat, in ui_clk cycles
   localparam integer REF_PERIOD = 2340;   // refresh every 7.8 us
-  localparam integer REF_STALL  = 240;    // ... for 0.8 us
+  localparam integer REF_STALL  = 75;     // ... for 0.25 us (3 % dead time; 14-bit full rate tolerates 10 %)
 
   reg ui_clk   = 1'b0;
   reg axis_clk = 1'b0;
@@ -50,7 +50,7 @@ module tb_DDR4Streamer;
   reg                   ext_trigger  = 1'b0;
   reg                   ext_trig_en  = 1'b0;
   reg                   loop_forever = 1'b0;
-  reg  [1:0]            rate_sel     = 2'd0;
+  reg  [2:0]            mode         = 3'd0;
   reg  [23:0]           loop_count   = 24'd1;
   reg  [ADDR_WIDTH-13:0] base_page   = 0;
   reg  [27:0]           num_words    = 28'd0;
@@ -91,7 +91,7 @@ module tb_DDR4Streamer;
     .ext_trigger   (ext_trigger),
     .ext_trig_en   (ext_trig_en),
     .loop_forever  (loop_forever),
-    .rate_sel      (rate_sel),
+    .mode          (mode),
     .loop_count    (loop_count),
     .base_page     (base_page),
     .num_words     (num_words),
@@ -188,14 +188,40 @@ module tb_DDR4Streamer;
   reg [15:0]     got;
   reg [15:0]     want;
 
+  integer        sample_bits;              // stored bits per sample for the current mode
+
   always @(*) begin
-    case (rate_sel)
-      2'd0:    per_half = 8;
-      2'd1:    per_half = 4;
-      2'd2:    per_half = 2;
-      default: per_half = 1;
+    case (mode)
+      3'd0:    per_half = 8;
+      3'd1:    per_half = 4;
+      3'd2:    per_half = 2;
+      3'd3:    per_half = 1;
+      default: per_half = 16;              // full rate
+    endcase
+    case (mode)
+      3'd4:    sample_bits = 14;
+      3'd5:    sample_bits = 12;
+      3'd6:    sample_bits = 8;
+      default: sample_bits = 16;
     endcase
   end
+
+  // Expected output for stored sample j of the waveform: the memory read as a stream of
+  // sample_bits-wide samples, MSB-aligned in 16 bits.
+  function [15:0] expected_sample;
+    input [63:0] j;
+    reg [63:0] bit_index;
+    reg [15:0] word16;
+    integer b;
+    begin
+      expected_sample = 16'd0;
+      for (b = 0; b < sample_bits; b = b + 1) begin
+        bit_index = exp_first * 64'd16 + j * sample_bits + b;
+        word16    = pattern(bit_index >> 4);
+        expected_sample[16 - sample_bits + b] = word16[bit_index[3:0]];
+      end
+    end
+  endfunction
 
   always @(posedge axis_clk) begin
     if (tvalid && tready && is_data) begin
@@ -204,7 +230,7 @@ module tb_DDR4Streamer;
           got = tdata[16*k +: 16];
         else
           got = tdata[256 + 16*(k - per_half) +: 16];
-        want = pattern(exp_first + (checked % exp_len));
+        want = expected_sample(checked % exp_len);
         if (got !== want) begin
           errors = errors + 1;
           if (errors < 10)
@@ -222,7 +248,10 @@ module tb_DDR4Streamer;
     // mirror of how the DUT loads m_axis_tdata
     if (!uut.rd_active)
       is_data <= 1'b0;
-    else if (tready && uut.rstate == 2'd2)
+    else if (mode[2]) begin
+      if (tready)
+        is_data <= uut.pk_v;
+    end else if (tready && uut.rstate == 2'd2)
       is_data <= (uut.cnt != 4'd0) || uut.fifo_rd_valid;
     else if (tready && uut.rstate == 2'd3)
       is_data <= 1'b0;
@@ -250,21 +279,21 @@ module tb_DDR4Streamer;
   endtask
 
   task arm;
-    input [1:0]  sel;
+    input [2:0]  sel;
     input [20:0] page;
     input [27:0] words;
     input [23:0] loops;
     input        forever_mode;
     begin
-      rate_sel     = sel;
+      mode         = sel;
       base_page    = page;
       num_words    = words;
       loop_count   = loops;
       loop_forever = forever_mode;
       exp_first    = {43'd0, page} * 64'd2048;     // 4096 bytes = 2048 samples per page
-      exp_len      = {36'd0, words} * 64'd32;
       checked      = 0;
-      repeat (4) @(posedge axis_clk);
+      repeat (4) @(posedge axis_clk);              // `mode` settles, sample_bits follows
+      exp_len      = {36'd0, words} * 64'd512 / sample_bits;
       enable = 1'b1;
       wait_status(1, 1'b1, 200000);                // ready
     end
@@ -292,7 +321,7 @@ module tb_DDR4Streamer;
   endtask
 
   task play_once;
-    input [1:0]  sel;
+    input [2:0]  sel;
     input [20:0] page;
     input [27:0] words;
     input [23:0] loops;
@@ -302,7 +331,7 @@ module tb_DDR4Streamer;
       fire;
       wait_status(3, 1'b1, 4000000);               // done
       repeat (40) @(posedge axis_clk);
-      want_samples = words * 32 * loops;
+      want_samples = words * 512 / sample_bits * loops;
       if (checked != want_samples) begin
         errors = errors + 1;
         $display("ERROR: %0d samples played, expected %0d", checked, want_samples);
@@ -312,7 +341,7 @@ module tb_DDR4Streamer;
         $display("ERROR: underflow=%0d read_error=%0d", st_underflow, st_rd_err);
       end
       tests_run = tests_run + 1;
-      $display("  rate_sel=%0d page=%0d words=%0d loops=%0d: %0d samples checked, %0d errors so far",
+      $display("  mode=%0d page=%0d words=%0d loops=%0d: %0d samples checked, %0d errors so far",
                sel, page, words, loops, checked, errors);
       disarm;
     end
@@ -326,21 +355,28 @@ module tb_DDR4Streamer;
     repeat (20) @(posedge axis_clk);
 
     $display("one-shot playback, all rate modes and awkward lengths");
-    play_once(2'd0, 21'd5, 28'd1,    24'd1);
-    play_once(2'd0, 21'd5, 28'd63,   24'd1);
-    play_once(2'd1, 21'd5, 28'd64,   24'd1);
-    play_once(2'd2, 21'd5, 28'd65,   24'd1);
-    play_once(2'd3, 21'd5, 28'd200,  24'd1);
-    play_once(2'd0, 21'd7, 28'd2500, 24'd1);
-    play_once(2'd1, 21'd7, 28'd2500, 24'd1);
+    play_once(3'd0, 21'd5, 28'd1,    24'd1);
+    play_once(3'd0, 21'd5, 28'd63,   24'd1);
+    play_once(3'd1, 21'd5, 28'd64,   24'd1);
+    play_once(3'd2, 21'd5, 28'd65,   24'd1);
+    play_once(3'd3, 21'd5, 28'd200,  24'd1);
+    play_once(3'd0, 21'd7, 28'd2500, 24'd1);
+    play_once(3'd1, 21'd7, 28'd2500, 24'd1);
 
     $display("counted loops");
-    play_once(2'd1, 21'd9, 28'd100,  24'd3);
-    play_once(2'd0, 21'd9, 28'd70,   24'd4);
-    play_once(2'd2, 21'd9, 28'd1,    24'd5);
+    play_once(3'd1, 21'd9, 28'd100,  24'd3);
+    play_once(3'd0, 21'd9, 28'd70,   24'd4);
+    play_once(3'd2, 21'd9, 28'd1,    24'd5);
+
+    $display("full rate, bit-packed samples");
+    play_once(3'd4, 21'd6, 28'd7,    24'd1);       // 14 bit: groups of 7 words = 256 samples
+    play_once(3'd4, 21'd6, 28'd259,  24'd1);
+    play_once(3'd5, 21'd6, 28'd120,  24'd1);       // 12 bit: groups of 3 words = 128 samples
+    play_once(3'd6, 21'd6, 28'd50,   24'd1);       //  8 bit: 1 word = 64 samples
+    play_once(3'd4, 21'd3, 28'd21,   24'd3);
 
     $display("loop forever, abort, then a different waveform");
-    arm(2'd0, 21'd2, 28'd130, 24'd1, 1'b1);
+    arm(3'd0, 21'd2, 28'd130, 24'd1, 1'b1);
     fire;
     repeat (3000) @(posedge axis_clk);
     if (!st_running || checked < 5 * 130 * 32) begin
@@ -348,11 +384,11 @@ module tb_DDR4Streamer;
       $display("ERROR: looping playback is not running (checked=%0d)", checked);
     end
     disarm;
-    play_once(2'd2, 21'd40, 28'd77, 24'd1);
+    play_once(3'd2, 21'd40, 28'd77, 24'd1);
 
     $display("external trigger");
     ext_trig_en = 1'b1;
-    arm(2'd1, 21'd3, 28'd50, 24'd1, 1'b0);
+    arm(3'd1, 21'd3, 28'd50, 24'd1, 1'b0);
     #7.3 ext_trigger = 1'b1;                       // deliberately asynchronous
     wait_status(3, 1'b1, 100000);
     repeat (40) @(posedge axis_clk);

@@ -13,6 +13,18 @@ reduced and the RF data converter interpolates back up to 9.8304 GS/s:
 
 (usable bandwidth = 80 % of the input Nyquist band, the pass band of the RFDC filters)
 
+For a few hundred milliseconds at the full 9.8304 GS/s there are the full-rate modes
+(``set_full_rate``). 16-bit samples at that rate are more than the DDR4 can deliver, so samples
+are stored bit-packed and unpacked in the FPGA:
+
+    stored bits   DDR4 read load   seconds in 4 GiB   note
+        14          17.2 GB/s          0.250          every bit the 14-bit DAC converts
+        12          14.7 GB/s          0.291          quantisation noise 12 dB higher
+         8           9.8 GB/s          0.437          for square-ish / coarse waveforms
+
+The DDR4 peaks at 19.2 GB/s, so only one channel can run a full-rate mode at a time, and
+whether the 14-bit mode keeps up has to be measured: ``status()["buffer_low_water"]``.
+
 Nothing here imports pynq, so the module can be unit tested off the board.
 """
 
@@ -30,8 +42,13 @@ SAMPLES_PER_WORD = WORD_BYTES // 2
 PAGE_BYTES = 4096                # waveforms start on a 4 KiB boundary
 FULL_RATE_WORDS = 16             # samples per 614.4 MHz RFDC beat at interpolation 1
 
-#: RFDC interpolation factor -> rate_sel of DDR4Streamer
+#: RFDC interpolation factor -> mode[1:0] of DDR4Streamer
 RATE_SEL = {2: 0, 4: 1, 8: 2, 16: 3}
+#: stored bits per sample in the full-rate modes -> mode[1:0] of DDR4Streamer
+FULL_RATE_SEL = {14: 0, 12: 1, 8: 2}
+#: stored bits -> samples per group; waveforms are padded to whole groups (7, 3, 1 words)
+GROUP_SAMPLES = {14: 256, 12: 128, 8: 64}
+FIFO_DEPTH = 4096                # DDR4Streamer FIFO_AW = 12
 
 # control word (AXI GPIO output)
 CTRL_ENABLE = 1 << 0
@@ -41,6 +58,8 @@ CTRL_LOOP_FOREVER = 1 << 3
 CTRL_RATE_SHIFT = 4
 CTRL_RATE_MASK = 0b11 << CTRL_RATE_SHIFT
 CTRL_SOURCE_DDR4 = 1 << 6        # DacSourceMux: 0 = BRAM player, 1 = DDR4 player
+CTRL_FULL_RATE = 1 << 7          # bit-packed samples, RFDC interpolation 1x
+CTRL_MODE_MASK = CTRL_RATE_MASK | CTRL_FULL_RATE
 CTRL_LOOPS_SHIFT = 8
 MAX_LOOPS = (1 << 24) - 1
 
@@ -55,8 +74,8 @@ STATUS_BITS = {
     "trig_early": 6,
     "armed": 7,
 }
-STATUS_FILL_SHIFT = 16
-STATUS_FILL_MASK = 0xFFF
+STATUS_LOW_WATER_SHIFT = 16
+STATUS_LOW_WATER_MASK = 0xFFFF
 
 MAX_WORDS = (1 << 28) - 1
 ABORT_HOLD_S = 0.002             # DDR4Streamer needs `enable` low for >= 1 ms
@@ -73,25 +92,54 @@ class Segment:
     base_page: int               # absolute DDR4 address / 4096
     num_words: int               # length in 64-byte words (tail is zero padded)
     num_samples: int             # samples the caller supplied
+    bits: int = 16               # stored bits per sample (14, 12, 8: full-rate modes)
 
     @property
     def padded_samples(self) -> int:
-        return self.num_words * SAMPLES_PER_WORD
+        return self.num_words * WORD_BYTES * 8 // self.bits
 
-    def duration(self, interpolation: int) -> float:
+    def duration(self, interpolation: int = 1) -> float:
         return self.padded_samples / input_rate(interpolation)
 
 
 def input_rate(interpolation: int) -> float:
-    """DAC input sample rate in samples/s for an RFDC interpolation factor."""
-    if interpolation not in RATE_SEL:
-        raise ValueError(f"interpolation must be one of {sorted(RATE_SEL)}, got {interpolation}")
+    """DAC input sample rate in samples/s for an RFDC interpolation factor (1 = full rate)."""
+    if interpolation != 1 and interpolation not in RATE_SEL:
+        raise ValueError(f"interpolation must be 1 or one of {sorted(RATE_SEL)}, got {interpolation}")
     return DAC_SAMPLE_RATE / interpolation
 
 
 def usable_bandwidth(interpolation: int) -> float:
-    """Upper edge in Hz of the band the RFDC interpolation filters pass cleanly."""
+    """Upper edge in Hz of the usable band: Nyquist at full rate, otherwise the 80 % of the
+    input Nyquist band that the RFDC interpolation filters pass cleanly."""
+    if interpolation == 1:
+        return input_rate(1) / 2
     return 0.8 * input_rate(interpolation) / 2
+
+
+def pack_samples(samples: np.ndarray, bits: int) -> np.ndarray:
+    """Pack int16 samples into a little-endian stream of ``bits``-wide samples (uint8 array).
+
+    14-bit keeps the top 14 bits, which is all the 14-bit DAC converts. 12 and 8 bit round to
+    nearest and saturate. The number of samples must be a multiple of 4 (14 bit) or 2 (12 bit).
+    """
+    if bits not in FULL_RATE_SEL:
+        raise ValueError(f"bits must be one of {sorted(FULL_RATE_SEL)}, got {bits}")
+    shift = 16 - bits
+    wide = samples.astype(np.int32)
+    if bits != 14:
+        wide = np.minimum(wide + (1 << (shift - 1)), 32767)
+    code = ((wide >> shift) & ((1 << bits) - 1)).astype(np.uint64)
+    if bits == 8:
+        return code.astype(np.uint8)
+    per, nbytes, dtype = (4, 7, "<u8") if bits == 14 else (2, 3, "<u4")
+    if code.size % per:
+        raise ValueError(f"{bits}-bit packing needs a multiple of {per} samples")
+    code = code.reshape(-1, per)
+    value = np.zeros(code.shape[0], dtype=np.uint64)
+    for i in range(per):
+        value |= code[:, i] << np.uint64(bits * i)
+    return value.astype(dtype).view(np.uint8).reshape(-1, int(dtype[2]))[:, :nbytes].reshape(-1)
 
 
 Waveform = Union[np.ndarray, Iterable[np.ndarray]]
@@ -135,6 +183,8 @@ class Ddr4Player:
 
         self.name = name
         self.memory = memory
+        self._bytes = memory.view(np.uint8)
+        self.sample_bits = 16
         self.region_start = region_start
         self.region_bytes = region_bytes
         self._ctrl_channel = ctrl_channel
@@ -151,10 +201,12 @@ class Ddr4Player:
     # ------------------------------------------------------------------ sizes
     @property
     def capacity_samples(self) -> int:
-        return self.region_bytes // 2
+        """Samples that fit in this player's region in the current mode."""
+        return self.region_bytes * 8 // self.sample_bits
 
-    def max_duration(self, interpolation: int | None = None) -> float:
-        return self.capacity_samples / input_rate(interpolation or self.interpolation)
+    def max_duration(self) -> float:
+        """Longest waveform in seconds in the current mode."""
+        return self.capacity_samples / input_rate(self.interpolation)
 
     # ------------------------------------------------------------------ loading
     def load(self, waveform: Waveform, offset_bytes: int = 0) -> Segment:
@@ -168,6 +220,8 @@ class Ddr4Player:
             raise ValueError("offset_bytes must be a multiple of 4096 inside the region")
         if self.is_busy():
             raise Ddr4PlayerError(f"{self.name}: stop() playback before loading")
+        if self.sample_bits != 16:
+            return self._load_packed(waveform, offset_bytes, self.sample_bits)
 
         chunks = [waveform] if isinstance(waveform, np.ndarray) else waveform
         first = (self.region_start + offset_bytes) // 2
@@ -204,6 +258,53 @@ class Ddr4Player:
         )
         return self.segment
 
+    def _load_packed(self, waveform: Waveform, offset_bytes: int, bits: int) -> Segment:
+        """Full-rate modes: quantise to ``bits`` and store as one packed bit stream."""
+        chunks = [waveform] if isinstance(waveform, np.ndarray) else waveform
+        first = self.region_start + offset_bytes
+        limit = self.region_start + self.region_bytes
+        position = first
+        num_samples = 0
+        carry = np.zeros(0, dtype=np.int16)
+        align = 4                                   # samples that end on a byte boundary
+
+        def store(samples: np.ndarray) -> int:
+            packed = pack_samples(samples, bits)
+            if position + packed.size > limit:
+                raise ValueError(
+                    f"waveform exceeds {self.name} DDR4 region of "
+                    f"{(limit - first) * 8 // bits} samples at {bits} bits"
+                )
+            self._bytes[position : position + packed.size] = packed
+            return position + packed.size
+
+        for chunk in chunks:
+            data = np.asarray(chunk)
+            if data.dtype != np.int16:
+                raise TypeError(f"waveform chunks must be int16, got {data.dtype}")
+            if data.ndim != 1:
+                raise ValueError("waveform chunks must be 1D")
+            num_samples += data.size
+            data = np.concatenate((carry, data)) if carry.size else data
+            whole = data.size - data.size % align
+            position = store(data[:whole])
+            carry = data[whole:].copy()
+
+        if num_samples == 0:
+            raise ValueError("waveform is empty")
+        group = GROUP_SAMPLES[bits]
+        tail = np.zeros(carry.size + (-num_samples % group), dtype=np.int16)
+        tail[: carry.size] = carry
+        position = store(tail)
+
+        self.segment = Segment(
+            base_page=first // PAGE_BYTES,
+            num_words=(position - first) // WORD_BYTES,
+            num_samples=num_samples,
+            bits=bits,
+        )
+        return self.segment
+
     # ------------------------------------------------------------------ rate
     def set_interpolation(self, interpolation: int) -> None:
         """Select the DAC input rate and point the DAC at the DDR4 player.
@@ -220,8 +321,28 @@ class Ddr4Player:
             self.rfdc_block.InterpolationFactor = interpolation
             self.rfdc_block.FabWrVldWords = FULL_RATE_WORDS // interpolation
         self.interpolation = interpolation
-        self._ctrl = (self._ctrl & ~CTRL_RATE_MASK) | (RATE_SEL[interpolation] << CTRL_RATE_SHIFT)
+        self.sample_bits = 16
+        self._ctrl = (self._ctrl & ~CTRL_MODE_MASK) | (RATE_SEL[interpolation] << CTRL_RATE_SHIFT)
         self._write_ctrl(self._ctrl | CTRL_SOURCE_DDR4)
+
+    def set_full_rate(self, bits: int = 14) -> None:
+        """Play at the full 9.8304 GS/s from bit-packed samples (14, 12 or 8 bits each).
+
+        Only one DAC channel can use a full-rate mode at a time: two would ask the DDR4 for
+        more than it can deliver. Waveforms must be loaded after this call, because the
+        storage format depends on ``bits``.
+        """
+        if bits not in FULL_RATE_SEL:
+            raise ValueError(f"bits must be one of {sorted(FULL_RATE_SEL)}, got {bits}")
+        if self.is_busy():
+            raise Ddr4PlayerError(f"{self.name}: stop() playback before changing the rate")
+        if self.rfdc_block is not None:
+            self.rfdc_block.InterpolationFactor = 1
+            self.rfdc_block.FabWrVldWords = FULL_RATE_WORDS
+        self.interpolation = 1
+        self.sample_bits = bits
+        self._ctrl = (self._ctrl & ~CTRL_MODE_MASK) | (FULL_RATE_SEL[bits] << CTRL_RATE_SHIFT)
+        self._write_ctrl(self._ctrl | CTRL_FULL_RATE | CTRL_SOURCE_DDR4)
 
     def select_bram_player(self) -> None:
         """Hand the DAC channel back to the full-rate BRAM player."""
@@ -229,7 +350,9 @@ class Ddr4Player:
         if self.rfdc_block is not None:
             self.rfdc_block.InterpolationFactor = 1
             self.rfdc_block.FabWrVldWords = FULL_RATE_WORDS
-        self._write_ctrl(self._ctrl & ~CTRL_SOURCE_DDR4)
+        self.interpolation = 1
+        self.sample_bits = 16
+        self._write_ctrl(self._ctrl & ~(CTRL_SOURCE_DDR4 | CTRL_MODE_MASK))
 
     # ------------------------------------------------------------------ playback
     def arm(
@@ -247,7 +370,12 @@ class Ddr4Player:
         if not 1 <= loops <= MAX_LOOPS:
             raise ValueError(f"loops must be between 1 and {MAX_LOOPS}")
         if not self._ctrl & CTRL_SOURCE_DDR4:
-            raise Ddr4PlayerError(f"{self.name}: call set_interpolation() first")
+            raise Ddr4PlayerError(f"{self.name}: call set_interpolation() or set_full_rate() first")
+        if segment.bits != self.sample_bits:
+            raise Ddr4PlayerError(
+                f"{self.name}: segment was stored with {segment.bits}-bit samples, the current "
+                f"mode needs {self.sample_bits}; load() it again"
+            )
         start = segment.base_page * PAGE_BYTES
         end = start + segment.num_words * WORD_BYTES
         if start < self.region_start or end > self.region_start + self.region_bytes:
@@ -256,7 +384,7 @@ class Ddr4Player:
         self.stop()
         self._base_channel.write(segment.base_page, 0xFFFFFFFF)
         self._words_channel.write(segment.num_words, 0xFFFFFFFF)
-        ctrl = self._ctrl & (CTRL_RATE_MASK | CTRL_SOURCE_DDR4)
+        ctrl = self._ctrl & (CTRL_MODE_MASK | CTRL_SOURCE_DDR4)
         ctrl |= loops << CTRL_LOOPS_SHIFT
         if forever:
             ctrl |= CTRL_LOOP_FOREVER
@@ -305,7 +433,10 @@ class Ddr4Player:
     def status(self) -> dict:
         raw = int(self._status_channel.read())
         result = {name: bool(raw >> bit & 1) for name, bit in STATUS_BITS.items()}
-        result["buffer_fill"] = raw >> STATUS_FILL_SHIFT & STATUS_FILL_MASK
+        # Lowest fill of the short buffer during playback, out of FIFO_DEPTH words. Close to
+        # FIFO_DEPTH: the DDR4 keeps up easily. Falling towards 0: it does not. None: not measured.
+        low_water = raw >> STATUS_LOW_WATER_SHIFT & STATUS_LOW_WATER_MASK
+        result["buffer_low_water"] = low_water if low_water <= FIFO_DEPTH else None
         return result
 
     def is_busy(self) -> bool:
@@ -318,6 +449,7 @@ class Ddr4Player:
             "region_bytes": self.region_bytes,
             "capacity_samples": self.capacity_samples,
             "interpolation": self.interpolation,
+            "sample_bits": self.sample_bits,
             "input_rate_sps": input_rate(self.interpolation),
             "usable_bandwidth_hz": usable_bandwidth(self.interpolation),
             "max_duration_s": self.max_duration(),
@@ -370,7 +502,7 @@ def attach(overlay, ddr4_ip: str = "ddr4_0", split: tuple[float, float] = (0.5, 
     """Build the two DDR4 players of an overlay that contains the DDR4 design.
 
     ``split`` is the share of the DDR4 given to DAC0 and DAC2; use ``(1.0, 0.0)`` to give one
-    channel everything. Returns ``{}`` when the bitstream has no PL DDR4, so the existing
+    channel everything, which is what the full-rate modes want. Returns ``{}`` when the bitstream has no PL DDR4, so the existing
     BRAM-only overlay keeps working.
     """
     if ddr4_ip not in getattr(overlay, "mem_dict", {}):

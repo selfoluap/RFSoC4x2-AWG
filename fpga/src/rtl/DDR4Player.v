@@ -12,15 +12,17 @@
 //   [1]     sw_trigger     rising edge starts playback
 //   [2]     ext_trig_en    also start on a rising edge of ext_trigger
 //   [3]     loop_forever
-//   [5:4]   rate_sel       0: 2x  1: 4x  2: 8x  3: 16x RFDC interpolation
+//   [5:4]   mode[1:0]      with mode[2] = 0:  0: 2x  1: 4x  2: 8x  3: 16x RFDC interpolation
+//                          with mode[2] = 1:  0: 14-bit  1: 12-bit  2: 8-bit packed, full rate
 //   [6]     source_sel     0: BRAM player drives the DAC   1: DDR4 player drives the DAC
+//   [7]     mode[2]        1: full rate (RFDC interpolation 1x), bit-packed samples
 //   [31:8]  loop_count     passes through the waveform (0 is treated as 1)
 // -------------------------------------------------------------------------------------------------
 `timescale 1ns / 1ps
 
 module DDR4Player #(
   parameter integer ADDR_WIDTH = 33,
-  parameter integer FIFO_AW    = 11
+  parameter integer FIFO_AW    = 12
 ) (
   (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 m_axi_aclk CLK" *)
   (* X_INTERFACE_PARAMETER = "ASSOCIATED_BUSIF m_axi, ASSOCIATED_RESET m_axi_aresetn" *)
@@ -96,7 +98,7 @@ module DDR4Player #(
     .ext_trigger   (ext_trigger),
     .ext_trig_en   (ctrl[2]),
     .loop_forever  (ctrl[3]),
-    .rate_sel      (ctrl[5:4]),
+    .mode          ({ctrl[7], ctrl[5:4]}),
     .loop_count    (ctrl[31:8]),
     .base_page     (base_page),
     .num_words     (num_words),
