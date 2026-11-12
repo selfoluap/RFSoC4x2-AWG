@@ -144,6 +144,11 @@ class OverlayController(Overlay):
         self.dac0.disable()
         self.dac2.disable()
 
+        # Sequence players; empty unless the bitstream was built with the sequencer.
+        from .sequencer import attach as _attach_seq_players
+
+        self.seq = _attach_seq_players(self)
+
         # Long-waveform players; empty unless the bitstream was built with the PL DDR4.
         from .ddr4_player import attach as _attach_ddr4_players
 

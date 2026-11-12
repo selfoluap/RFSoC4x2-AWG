@@ -19,6 +19,19 @@ proc create_project_from_sources {} {
 
     add_files -fileset sources_1 $::cfg(rtl_files)
     add_files -fileset constrs_1 $::cfg(xdc_file)
+    if {$::cfg(enable_seq) || $::cfg(enable_ddr4)} {
+        require_file "external trigger XDC constraints" $::cfg(trigger_xdc_file)
+        require_file "sequencer block design Tcl" $::cfg(seq_bd_tcl_file)
+        add_files -fileset constrs_1 $::cfg(trigger_xdc_file)
+    }
+    if {$::cfg(enable_seq)} {
+        foreach rtl_file $::cfg(seq_rtl_files) {
+            require_file "sequencer RTL source" $rtl_file
+        }
+        require_file "sequencer XDC constraints" $::cfg(seq_xdc_file)
+        add_files -fileset sources_1 $::cfg(seq_rtl_files)
+        add_files -fileset constrs_1 $::cfg(seq_xdc_file)
+    }
     if {$::cfg(enable_ddr4)} {
         foreach rtl_file $::cfg(ddr4_rtl_files) {
             require_file "DDR4 player RTL source" $rtl_file
@@ -34,10 +47,18 @@ proc create_project_from_sources {} {
     open_bd_design [get_files [format "*/%s.bd" $::cfg(bd_name)]]
 
     validate_current_design
+    # add-ons come after the reference design has passed its own checks
+    if {$::cfg(enable_seq) || $::cfg(enable_ddr4)} {
+        source $::cfg(seq_bd_tcl_file)          ;# also holds the helper procs both add-ons use
+    }
+    if {$::cfg(enable_seq)} {
+        add_sequencer
+    }
     if {$::cfg(enable_ddr4)} {
-        # added after the reference design has passed its own checks
         source $::cfg(ddr4_bd_tcl_file)
         add_ddr4_player
+    }
+    if {$::cfg(enable_seq) || $::cfg(enable_ddr4)} {
         validate_bd_design
         save_bd_design
     }

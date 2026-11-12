@@ -1,5 +1,6 @@
 # -------------------------------------------------------------------------------------------------
 # Constraints for the PL DDR4 long-waveform player (only used when RFSOC_AWG_DDR4=1).
+# The external trigger pin is in ext_trigger.xdc.
 #
 # The PL DDR4 pin assignments below are copied unchanged from the RFSoC4x2 base overlay of
 # Xilinx/RFSoC-PYNQ (boards/RFSoC4x2/base/vivado/constraints/base.xdc):
@@ -161,16 +162,6 @@ set_property PACKAGE_PIN A15			[get_ports "ddr4_pl_odt[0]"]
 set_property IOSTANDARD SSTL12_DCI		[get_ports {ddr4_pl_odt[?]}]
 set_property PACKAGE_PIN E14			[get_ports "ddr4_pl_reset_n"]
 set_property IOSTANDARD LVCMOS12		[get_ports {ddr4_pl_reset_n}]
-
-# -------------------------------------------------------------------------------------------------
-# External trigger input: PMOD0 pin 0 (pin location from the same base overlay constraints).
-# The FPGA pin is LVCMOS18. Check the board manual for the voltage allowed at the connector
-# before wiring a trigger source to it.
-# -------------------------------------------------------------------------------------------------
-set_property PACKAGE_PIN AF16      [get_ports ext_trigger]
-set_property IOSTANDARD LVCMOS18   [get_ports ext_trigger]
-set_property PULLDOWN true         [get_ports ext_trigger]
-set_false_path -from [get_ports ext_trigger]
 
 # -------------------------------------------------------------------------------------------------
 # Clock domain crossings of the DDR4 player

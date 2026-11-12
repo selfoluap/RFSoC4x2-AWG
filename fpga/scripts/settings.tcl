@@ -32,6 +32,14 @@ set ::cfg(ddr4_rtl_files) [list \
     [file join $::cfg(repo_root) src rtl DDR4Player.v] \
 ]
 set ::cfg(ddr4_xdc_file) [file join $::cfg(repo_root) src constraints ddr4_pl.xdc]
+
+# Optional sequence mode for the on-chip-memory player: build with RFSOC_AWG_SEQ=1.
+# Off by default. See SEQUENCER.md. Can be combined with RFSOC_AWG_DDR4=1.
+set ::cfg(enable_seq) [expr {[info exists ::env(RFSOC_AWG_SEQ)] && $::env(RFSOC_AWG_SEQ) eq "1"}]
+set ::cfg(seq_rtl_files) [list [file join $::cfg(repo_root) src rtl DACSeqStreamer.v]]
+set ::cfg(seq_xdc_file) [file join $::cfg(repo_root) src constraints sequencer.xdc]
+set ::cfg(seq_bd_tcl_file) [file join $::cfg(repo_root) src bd add_sequencer.tcl]
+set ::cfg(trigger_xdc_file) [file join $::cfg(repo_root) src constraints ext_trigger.xdc]
 set ::cfg(ddr4_bd_tcl_file) [file join $::cfg(repo_root) src bd add_ddr4_player.tcl]
 
 proc require_vivado_version {} {

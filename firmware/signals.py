@@ -107,3 +107,56 @@ def serrodyne(
         start = end
 
     return x, _to_int16(y), n_samples
+
+
+def serrodyne_staircase(
+    ratios,
+    freqs_hz,
+    pattern_samples,
+    n_steps,
+    *,
+    amplitude,
+    sample_rate,
+    step_sign=1,
+    width=1.0,
+    predistort=None,
+):
+    """Blocks for a stepped Doppler sweep of a serrodyne pattern (sequence mode).
+
+    The pattern of ``pattern_samples`` samples repeats with period T and puts the optical lines
+    on a grid of 1/T. The target frequencies are snapped to that grid, and block k has all of
+    them shifted by k grid steps (``step_sign`` = +1 or -1), so every step moves every line by
+    exactly one grid position.
+
+    ``predistort`` is an optional function applied to each block (int16 in, array out).
+
+    Returns ``(blocks, info)``: an int16 array of shape (n_steps, pattern_samples) for
+    ``SeqPlayer.load_blocks`` and a dict with the grid, the snapped frequencies and the sweep.
+    """
+    if pattern_samples % 32:
+        raise ValueError("pattern_samples must be a multiple of 32 (one memory row)")
+    if step_sign not in (1, -1):
+        raise ValueError("step_sign must be +1 or -1")
+    sample_rate = float(sample_rate)
+    grid = sample_rate / pattern_samples
+    base_index = [int(round(float(f) / grid)) for f in freqs_hz]
+    period = pattern_samples / sample_rate
+
+    blocks = np.zeros((int(n_steps), int(pattern_samples)), dtype=np.int16)
+    for k in range(int(n_steps)):
+        freqs = [(n + step_sign * k) * grid for n in base_index]
+        _, block, count = serrodyne(
+            ratios, freqs, period, amplitude=amplitude, sample_rate=sample_rate, width=width
+        )
+        if count != pattern_samples:
+            raise RuntimeError(f"pattern came out {count} samples long, expected {pattern_samples}")
+        blocks[k] = block if predistort is None else _to_int16(predistort(block))
+
+    info = {
+        "grid_hz": grid,
+        "pattern_period_s": period,
+        "snapped_freqs_hz": [n * grid for n in base_index],
+        "final_freqs_hz": [(n + step_sign * (int(n_steps) - 1)) * grid for n in base_index],
+        "sweep_hz": step_sign * (int(n_steps) - 1) * grid,
+    }
+    return blocks, info

@@ -102,3 +102,9 @@ Use your newly generated reports as the source of truth for a fresh build.
 Building with `RFSOC_AWG_DDR4=1` in the environment adds the PL DDR4 controller and a DDR4 player
 per DAC: 0.25 to 0.44 s at the full 9.8304 GS/s from bit-packed samples, or 1.75 to 3.5 s at a
 reduced input rate. It is off by default and has not been built or tested on hardware yet. See [DDR4_PLAYER.md](DDR4_PLAYER.md).
+
+## Optional: sequence mode
+
+Building with `RFSOC_AWG_SEQ=1` replaces the looping player by one that plays stored blocks with
+repeat counts on a trigger (for example a 4 ms Doppler staircase) and doubles the waveform
+memory. Off by default, not yet built or tested on hardware. See [SEQUENCER.md](SEQUENCER.md).

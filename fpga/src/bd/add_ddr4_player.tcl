@@ -3,7 +3,8 @@
 #
 # add_ddr4_player - extends the dual-DAC block design with the PL DDR4 long-waveform player.
 #
-# Run on the open block design after bd_bd.tcl (create_project does this when RFSOC_AWG_DDR4=1).
+# Run on the open block design after bd_bd.tcl and, if used, add_sequencer.tcl (create_project
+# does this when RFSOC_AWG_DDR4=1). Uses the helper procs of add_sequencer.tcl.
 #
 # STATUS: written against the block design sources, NOT yet run through Vivado. The DDR4
 # controller settings and its clock/reset wiring are the ones of the RFSoC4x2 base overlay
@@ -27,7 +28,9 @@ proc ddr4_insert_player { hier gpio_prefix } {
   create_bd_pin -dir I -from 31 -to 0 $hier/ddr4_ctrl
   create_bd_pin -dir I -from 20 -to 0 $hier/ddr4_base_page
   create_bd_pin -dir I -from 27 -to 0 $hier/ddr4_num_words
-  create_bd_pin -dir I $hier/ext_trigger
+  if {[llength [get_bd_pins -quiet $hier/ext_trigger]] == 0} {
+    create_bd_pin -dir I $hier/ext_trigger
+  }
   create_bd_pin -dir O -from 31 -to 0 $hier/ddr4_status
 
   # put the player's source mux between the BRAM streamer and the clock converter
@@ -79,7 +82,6 @@ proc add_ddr4_player {} {
   set ddr4_pl [create_bd_intf_port -mode Master -vlnv xilinx.com:interface:ddr4_rtl:1.0 ddr4_pl]
   set sys_clk_ddr4 [create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:diff_clock_rtl:1.0 sys_clk_ddr4]
   set_property CONFIG.FREQ_HZ {200000000} $sys_clk_ddr4
-  create_bd_port -dir I ext_trigger
 
   # ------------------------------------------------------------------ DDR4 controller
   # Settings as in the RFSoC4x2 base overlay: DDR4-2400 (833 ps), 64-bit, 512-bit AXI.
@@ -139,20 +141,10 @@ proc add_ddr4_player {} {
   connect_bd_intf_net [get_bd_intf_pins hier_dac2_play/M_AXI_DDR4] [get_bd_intf_pins ddr4_smc/S02_AXI]
   connect_bd_net -net ddr4_ui_clk  [get_bd_pins hier_dac_play/ddr4_ui_clk]  [get_bd_pins hier_dac2_play/ddr4_ui_clk]
   connect_bd_net -net ddr4_aresetn [get_bd_pins hier_dac_play/ddr4_aresetn] [get_bd_pins hier_dac2_play/ddr4_aresetn]
-  connect_bd_net [get_bd_ports ext_trigger] [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]
+  connect_bd_net [awg_ext_trigger_port] [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]
 
-  # four more AXI-Lite slaves on the control interconnect (it has M00..M04 today)
-  set_property CONFIG.NUM_MI {9} [get_bd_cells control_interconnect]
-  set index 5
-  foreach gpio {axi_gpio_ddr0_ctl axi_gpio_ddr0_cfg axi_gpio_ddr2_ctl axi_gpio_ddr2_cfg} {
-    set port [format "M%02d" $index]
-    connect_bd_intf_net [get_bd_intf_pins control_interconnect/${port}_AXI] [get_bd_intf_pins $gpio/S_AXI]
-    connect_bd_net [get_bd_pins zynq_ultra_ps_e_0/pl_clk0] \
-      [get_bd_pins control_interconnect/${port}_ACLK] [get_bd_pins $gpio/s_axi_aclk]
-    connect_bd_net [get_bd_pins clocktree/s_axi_aresetn] \
-      [get_bd_pins control_interconnect/${port}_ARESETN] [get_bd_pins $gpio/s_axi_aresetn]
-    incr index
-  }
+  # four more AXI-Lite slaves on the next free ports of the control interconnect
+  awg_add_control_slaves {axi_gpio_ddr0_ctl axi_gpio_ddr0_cfg axi_gpio_ddr2_ctl axi_gpio_ddr2_cfg}
 
   # ------------------------------------------------------------------ addresses
   # PS: 8 GiB window at 0x10_0000_0000, as in the base overlay. Players: DDR4-relative from 0,
