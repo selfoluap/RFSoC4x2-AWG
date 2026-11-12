@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 from typing import Any, List, Literal
 
 import numpy as np
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.signal_utils import calculate_fft
 from backend.services.hardware import DAC_AMP, DAC_CHANNELS, HardwareService, hardware_service
+from backend.services.live import LiveView, run_live_session
 from backend.services.waveforms import generate_serrodyne_cached, generate_simple_waveform
 
 
@@ -261,6 +262,41 @@ def get_constants(hardware: HardwareService = Depends(get_hardware_service)):
         "BUF_LEN": hardware.buf_len,
         "overlay_info": overlay_info,
     }
+
+
+@app.get("/adc/info", response_model=dict[str, Any])
+def get_adc_info(hardware: HardwareService = Depends(get_hardware_service)):
+    """Whether this bitstream has the ADC capture path, and what the live view offers."""
+    capture = hardware.adc
+    if capture is None:
+        return {"available": False}
+    return {"available": True, **LiveView(hardware.capture_adc, capacity=capture.capacity).info()}
+
+
+@app.websocket("/adc/live")
+async def adc_live(websocket: WebSocket):
+    """Live ADC spectrum and time trace.
+
+    The server sends one "info" message, then "frame" messages while running. The browser may
+    send settings at any time: {"adc": "A".."D", "nfft": 1024..65536, "averaging": 1..256,
+    "max_hold": bool, "reset_hold": true, "fps": 0.5..30, "running": bool}. Captures only run
+    while a browser is connected.
+    """
+    await websocket.accept()
+    capture = hardware_service.adc
+    if capture is None:
+        await websocket.send_json({
+            "type": "error",
+            "message": "This bitstream has no ADC capture path (build with RFSOC_AWG_ADC=1).",
+        })
+        await websocket.close()
+        return
+    view = LiveView(hardware_service.capture_adc, capacity=capture.capacity)
+    await run_live_session(view, websocket.receive_json, websocket.send_json)
+    try:
+        await websocket.close()
+    except Exception:
+        pass   # already closed by the browser
 
 
 if __name__ == "__main__":

@@ -45,6 +45,48 @@ window = adc.read(timeout=10)
 
 `spectrum(samples, nfft=4096)` averages more segments for a smoother trace with coarser bins.
 
+## Live view in the web app
+
+The web app has a "Live view" panel: a spectrum and a time trace of one ADC input that update
+continuously, with no manual triggering.
+
+| Control | Options |
+| --- | --- |
+| Input | ADC A to D |
+| FFT size | 1,024 to 65,536 points (4.8 MHz down to 75 kHz per bin) |
+| Averaging | off, or a running average over 2 to 64 frames |
+| Max hold | keeps the highest level seen per frequency; "Clear" restarts it |
+| Frames per second | 5 to 30 requested; the readout shows the rate achieved |
+
+Readouts: peak frequency and level, total level with a clipping warning, resolution, and the
+achieved frame rate.
+
+How it works (stage 1, software only, no FPGA change):
+
+- The browser opens a WebSocket to `/api/adc/live`. For each frame the backend re-arms the
+  capture, triggers it itself, reads a short record, computes the spectrum and sends about
+  10 kB of JSON. The browser draws it on a canvas.
+- The board only captures while a browser has the panel open and running.
+- The live view and other captures share the one capture memory through a lock in the backend.
+- Each frame is a snapshot of at most 53 us, so the ADC is watched for well under 1 % of the
+  time: good for continuous or repeating signals, rare events are usually missed. Averaging and
+  max hold in the FPGA (stage 2) would raise that.
+- The time trace is not triggered on the signal, so it does not stand still. The analog
+  trigger will fix that.
+
+Deploying it: rebuild the frontend (`npm run build`), re-run `scripts/deploy_frontend.sh`, and
+re-run `scripts/install_frontend_nginx.sh` once, because the nginx site now forwards WebSocket
+upgrades. Restart the backend service.
+
+State: the frame builder and the connection loop pass 12 tests off the board, and the plotting
+code was rendered in a headless browser with a frame from the backend. **Not yet run:** the
+FastAPI endpoint itself, the React panel in a real build, and the whole chain on the board. The
+frame rate on the board's ARM cores is not measured; computing a frame took 0.5 to 5 ms on a
+desktop CPU, depending on FFT size.
+
+Files: `backend/services/live.py`, `/adc/info` and `/adc/live` in `backend/backend.py`,
+`frontend/src/components/LiveAdcPanel.tsx`, `frontend/src/live/`, `deploy/nginx/rfsoc-awg.conf`.
+
 ## How it works
 
 ```

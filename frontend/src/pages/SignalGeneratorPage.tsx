@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { api } from "../api";
+import { LiveAdcPanel } from "../components/LiveAdcPanel";
 import { WaveformPlots } from "../components/WaveformPlots";
 import { useAppState } from "../context/AppStateContext";
 import { computeExpectedSpectrum, generateSerrodynePreview, generateSimplePreview } from "../dsp";
@@ -301,6 +302,8 @@ export function SignalGeneratorPage() {
         frequencies={spectrum.frequencies}
         magnitudes={spectrum.magnitudes}
       />
+
+      <LiveAdcPanel />
     </>
   );
 }

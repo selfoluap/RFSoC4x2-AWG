@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import Optional
 
 import numpy as np
@@ -17,6 +18,8 @@ class HardwareService:
         self._bitfile = bitfile
         self._controller: Optional[OverlayController] = None
         self.last_signal: Optional[np.ndarray] = None
+        # one capture memory, shared by the live view and any other capture
+        self._adc_lock = threading.Lock()
 
     def initialize(self) -> None:
         if self._controller is None:
@@ -78,6 +81,19 @@ class HardwareService:
             "enabled": player.is_enabled(),
             "waveform_length": player.waveform_length,
         }
+
+    @property
+    def adc(self):
+        """ADC capture of the overlay, or None when the bitstream has no ADC path."""
+        return getattr(self.controller, "adc", None)
+
+    def capture_adc(self, adc: str, samples: int) -> np.ndarray:
+        """Capture now from ADC input "A".."D". Safe to call from several threads."""
+        capture = self.adc
+        if capture is None:
+            raise RuntimeError("this bitstream has no ADC capture (build with RFSOC_AWG_ADC=1)")
+        with self._adc_lock:
+            return capture.capture(adc, samples)
 
     def dacs_status(self) -> dict:
         return {channel: self.dac_status(channel) for channel in DAC_CHANNELS}
