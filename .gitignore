@@ -30,3 +30,6 @@ xsim.dir/
 *.bak
 *~
 .omx/
+
+# Python bytecode at any depth
+__pycache__/
