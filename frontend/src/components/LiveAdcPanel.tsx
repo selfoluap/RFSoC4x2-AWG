@@ -6,6 +6,7 @@ import {
   liveSocketUrl,
   parseLiveMessage,
   type AdcInput,
+  type AnalogTriggerType,
   type LiveFrame,
   type LiveInfo,
   type LiveSettings,
@@ -22,6 +23,9 @@ interface Readout {
   averaged: number;
   captureMs: number;
   fps: number;
+  triggered: boolean | null;
+  triggerEvents: number | null;
+  inputPeak: number | null;
 }
 
 const AVERAGING_CHOICES = [1, 2, 4, 8, 16, 32, 64];
@@ -40,6 +44,8 @@ export function LiveAdcPanel() {
   const [info, setInfo] = useState<LiveInfo | null>(null);
   const [settings, setSettings] = useState<LiveSettings | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
+  const [triggerType, setTriggerType] = useState<AnalogTriggerType>("envelope");
+  const [threshold, setThreshold] = useState(2000);
 
   const socketRef = useRef<WebSocket | null>(null);
   const frameRef = useRef<LiveFrame | null>(null);
@@ -88,7 +94,10 @@ export function LiveAdcPanel() {
           clipping: frame.clipping,
           averaged: frame.averaged,
           captureMs: frame.capture_ms,
-          fps: span > 0 ? (times.length - 1) / span : 0
+          fps: span > 0 ? (times.length - 1) / span : 0,
+          triggered: frame.triggered,
+          triggerEvents: frame.trigger ? frame.trigger.events : null,
+          inputPeak: frame.trigger ? frame.trigger.peak : null
         });
       }
     },
@@ -134,7 +143,8 @@ export function LiveAdcPanel() {
           averaging: parsed.averaging,
           max_hold: parsed.max_hold,
           fps: parsed.fps,
-          running: parsed.running
+          running: parsed.running,
+          trigger: parsed.trigger
         });
       } else {
         setMessage(parsed.message);
@@ -156,6 +166,19 @@ export function LiveAdcPanel() {
     }
   }, []);
 
+  // The analog trigger watches the displayed input. Applying it also switches the live view to
+  // triggered mode, so the time trace stands still.
+  const applyTrigger = useCallback(
+    (adc: AdcInput) => {
+      setMessage(null);
+      api
+        .setAnalogTrigger({ adc, mode: triggerType, threshold, enabled: true })
+        .then(() => send({ trigger: "analog" }))
+        .catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error)));
+    },
+    [send, threshold, triggerType]
+  );
+
   // close the connection when the panel goes away, so the board stops capturing
   useEffect(() => disconnect, [disconnect]);
 
@@ -170,6 +193,7 @@ export function LiveAdcPanel() {
   const inputs: AdcInput[] = info?.inputs ?? ["A", "B", "C", "D"];
   const nfftChoices = info?.nfft_choices ?? [4096];
   const binHz = info && settings ? info.sample_rate_hz / settings.nfft : null;
+  const canTrigger = Boolean(info?.trigger_modes.includes("analog"));
 
   return (
     <section className="panel section-panel">
@@ -212,7 +236,12 @@ export function LiveAdcPanel() {
                   key={input}
                   type="button"
                   className={settings.adc === input ? "mode-button active" : "mode-button"}
-                  onClick={() => send({ adc: input })}
+                  onClick={() => {
+                    send({ adc: input });
+                    if (settings.trigger === "analog") {
+                      applyTrigger(input);
+                    }
+                  }}
                 >
                   ADC {input}
                 </button>
@@ -272,6 +301,55 @@ export function LiveAdcPanel() {
         </div>
       )}
 
+      {live && settings && canTrigger && (
+        <div className="live-controls">
+          <div className="field">
+            <span className="field-label">Trigger</span>
+            <div className="live-input-grid">
+              <button
+                type="button"
+                className={settings.trigger === "free" ? "mode-button active" : "mode-button"}
+                onClick={() => send({ trigger: "free" })}
+              >
+                Free run
+              </button>
+              <button
+                type="button"
+                className={settings.trigger === "analog" ? "mode-button active" : "mode-button"}
+                onClick={() => applyTrigger(settings.adc)}
+              >
+                On signal
+              </button>
+            </div>
+          </div>
+          <label className="field">
+            <span className="field-label">Trigger type</span>
+            <select value={triggerType} onChange={(e) => setTriggerType(e.target.value as AnalogTriggerType)}>
+              <option value="envelope">RF burst (envelope)</option>
+              <option value="rising">Rising above level</option>
+              <option value="falling">Falling below level</option>
+            </select>
+          </label>
+          <label className="field">
+            <span className="field-label">Threshold (ADC counts)</span>
+            <input
+              type="number"
+              min={triggerType === "envelope" ? 1 : -32768}
+              max={32767}
+              step={100}
+              value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+            />
+          </label>
+          <div className="field">
+            <span className="field-label">Apply to ADC {settings.adc}</span>
+            <button type="button" onClick={() => applyTrigger(settings.adc)}>
+              Set trigger
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="live-plots">
         <article className="plot-card">
           <canvas ref={spectrumCanvasRef} className="live-canvas live-canvas-spectrum" />
@@ -299,6 +377,19 @@ export function LiveAdcPanel() {
             <span>resolution</span>
             <strong>{binHz ? `${formatFrequency(binHz)} per bin` : "-"}</strong>
           </div>
+          {readout.inputPeak !== null && (
+            <div className="readout-row">
+              <span>trigger</span>
+              <strong>
+                {readout.triggered === null
+                  ? "free run"
+                  : readout.triggered
+                    ? "triggered"
+                    : "no trigger, showing untriggered"}
+                {`, input peak ${readout.inputPeak} counts, ${readout.triggerEvents ?? 0} events`}
+              </strong>
+            </div>
+          )}
           <div className="readout-row">
             <span>update</span>
             <strong>

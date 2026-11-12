@@ -14,7 +14,7 @@
 //
 //   ctrl    [0] arm   [1] sw_trigger (rising edge, always accepted)
 //           [4:2] extra trigger source: 0 none, 1 external pin, 2 DAC0 playback start,
-//                 3 DAC2 playback start
+//                 3 DAC2 playback start, 4 analog trigger (AnalogTrigger, see below)
 //           [6:5] ADC input select (stream 0..3)
 //   delay   words (16 samples, 3.26 ns) to skip between trigger and first recorded word
 //   nrows   words to record (0 or more than the memory holds = whole memory)
@@ -22,6 +22,9 @@
 //           [30:16] words recorded
 //
 // The ADC streams are never back-pressured (tready is constant 1).
+//
+// The block also holds the analog trigger detector (AnalogTrigger.v), which watches one of the
+// same four streams. Its `analog_trig` output is a trigger source here and for the DAC players.
 // -------------------------------------------------------------------------------------------------
 `timescale 1ns / 1ps
 
@@ -70,7 +73,14 @@ module ADCCapture #(
   input  wire                ext_trigger,
   input  wire [31:0]         dac0_status,     // seq_status of the DAC0 player (bit 1 = running)
   input  wire [31:0]         dac2_status,
-  output wire [31:0]         status
+  output wire [31:0]         status,
+
+  // analog trigger (see AnalogTrigger.v for the register layout)
+  input  wire [31:0]         trig_ctrl,
+  input  wire [31:0]         trig_thr,
+  input  wire [31:0]         trig_release,
+  output wire [31:0]         trig_status,
+  output wire                analog_trig
 );
 
   localparam integer ROWS  = MEM_SIZE_BYTES / (DWIDTH / 8);
@@ -105,12 +115,25 @@ module ADCCapture #(
   (* ASYNC_REG = "TRUE" *) reg arm_1 = 1'b0, arm_2 = 1'b0;
   (* ASYNC_REG = "TRUE" *) reg swt_1 = 1'b0, swt_2 = 1'b0;
   (* ASYNC_REG = "TRUE" *) reg ext_1 = 1'b0, ext_2 = 1'b0;
-  reg swt_3 = 1'b0, ext_3 = 1'b0, d0_1 = 1'b0, d2_1 = 1'b0;
+  reg swt_3 = 1'b0, ext_3 = 1'b0, d0_1 = 1'b0, d2_1 = 1'b0, at_1 = 1'b0;
+
+  AnalogTrigger u_atrig (
+    .clk           (axis_clk),
+    .aresetn       (axis_aresetn),
+    .d0 (s0_axis_tdata), .d1 (s1_axis_tdata), .d2 (s2_axis_tdata), .d3 (s3_axis_tdata),
+    .v0 (s0_axis_tvalid), .v1 (s1_axis_tvalid), .v2 (s2_axis_tvalid), .v3 (s3_axis_tvalid),
+    .ctrl          (trig_ctrl),
+    .thr           (trig_thr),
+    .release_words (trig_release),
+    .active        (analog_trig),
+    .status        (trig_status)
+  );
 
   wire trig = (swt_2 && !swt_3)
            || (ctrl[4:2] == 3'd1 && ext_2 && !ext_3)
            || (ctrl[4:2] == 3'd2 && dac0_status[1] && !d0_1)
-           || (ctrl[4:2] == 3'd3 && dac2_status[1] && !d2_1);
+           || (ctrl[4:2] == 3'd3 && dac2_status[1] && !d2_1)
+           || (ctrl[4:2] == 3'd4 && analog_trig && !at_1);
 
   // ------------------------------------------------------------ recorder
   reg [2:0]    state      = C_IDLE;
@@ -126,6 +149,7 @@ module ADCCapture #(
     ext_1 <= ext_trigger;  ext_2 <= ext_1;  ext_3 <= ext_2;
     d0_1  <= dac0_status[1];
     d2_1  <= dac2_status[1];
+    at_1  <= analog_trig;
 
     mem_we <= {(DWIDTH/8){1'b0}};
 

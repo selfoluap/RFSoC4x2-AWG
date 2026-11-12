@@ -31,8 +31,15 @@ class LiveView:
     """Produces display frames from a capture function ``capture(adc, samples) -> int16 array``."""
 
     def __init__(self, capture: Callable[[str, int], np.ndarray], capacity: int = 262144,
-                 sample_rate: float = ADC_SAMPLE_RATE, points: int = 1024, trace_points: int = 512):
+                 sample_rate: float = ADC_SAMPLE_RATE, points: int = 1024, trace_points: int = 512,
+                 capture_triggered=None, trigger_info=None):
+        """``capture_triggered(adc, samples) -> (int16 array, triggered)`` enables the "analog"
+        trigger mode, which holds the time trace still; ``trigger_info() -> dict`` adds the
+        analog trigger's settings and status to every frame."""
         self._capture = capture
+        self._capture_triggered = capture_triggered
+        self._trigger_info = trigger_info
+        self.trigger = "free"
         self.capacity = int(capacity)
         self.sample_rate = float(sample_rate)
         self.points = int(points)
@@ -55,6 +62,7 @@ class LiveView:
             "max_hold": self.max_hold,
             "fps": self.fps,
             "running": self.running,
+            "trigger": self.trigger,
         }
 
     def info(self) -> dict:
@@ -65,11 +73,12 @@ class LiveView:
             "inputs": sorted(ADC_INPUTS),
             "nfft_choices": [n for n in VALID_NFFT if n <= self.capacity],
             "max_fps": MAX_FPS,
+            "trigger_modes": ["free", "analog"] if self._capture_triggered else ["free"],
             "settings": self.settings(),
         }
 
     def update(self, adc=None, nfft=None, averaging=None, max_hold=None, fps=None, running=None,
-               reset_hold=None, **unknown) -> None:
+               reset_hold=None, trigger=None, **unknown) -> None:
         """Apply a settings message from the browser. Raises ValueError and changes nothing if
         any value is invalid."""
         if unknown:
@@ -92,7 +101,15 @@ class LiveView:
             if not (math.isfinite(new_fps) and 0.5 <= new_fps <= MAX_FPS):
                 raise ValueError(f"fps must be between 0.5 and {MAX_FPS:g}")
 
+        if trigger is not None:
+            if trigger not in ("free", "analog"):
+                raise ValueError('trigger must be "free" or "analog"')
+            if trigger == "analog" and self._capture_triggered is None:
+                raise ValueError("this bitstream has no analog trigger")
+
         changed_signal = (new_adc, new_nfft) != (self.adc, self.nfft)
+        if trigger is not None:
+            self.trigger = trigger
         self.adc, self.nfft, self.averaging, self.fps = new_adc, new_nfft, new_avg, new_fps
         if max_hold is not None:
             self.max_hold = bool(max_hold)
@@ -115,7 +132,12 @@ class LiveView:
         """Capture once and return one display frame (a JSON-serialisable dict)."""
         started = time.perf_counter()
         segments = max(1, min(MAX_SEGMENTS, self.capacity // self.nfft))
-        samples = np.asarray(self._capture(self.adc, self.nfft * segments))
+        triggered = None
+        if self.trigger == "analog":
+            samples, triggered = self._capture_triggered(self.adc, self.nfft * segments)
+            samples = np.asarray(samples)
+        else:
+            samples = np.asarray(self._capture(self.adc, self.nfft * segments))
         if samples.size < self.nfft:
             raise RuntimeError(f"capture returned {samples.size} samples, needed {self.nfft}")
 
@@ -158,6 +180,10 @@ class LiveView:
             "clipping": bool(np.abs(samples).max() >= CLIP_LEVEL),
             "trace": samples[: self.trace_points].astype(int).tolist(),
             "trace_dt_s": 1.0 / self.sample_rate,
+            # None: free running. True: the record starts at an analog trigger. False: no
+            # trigger came in time and the record was taken anyway.
+            "triggered": None if triggered is None else bool(triggered),
+            "trigger": self._trigger_info() if self._trigger_info else None,
             "capture_ms": round((time.perf_counter() - started) * 1e3, 2),
         }
 

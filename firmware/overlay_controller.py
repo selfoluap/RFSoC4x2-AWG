@@ -154,6 +154,11 @@ class OverlayController(Overlay):
 
         self.adc = _attach_adc_capture(self)
 
+        # Analog trigger on an ADC input; None unless the bitstream has the ADC path.
+        from .analog_trigger import attach as _attach_analog_trigger
+
+        self.analog_trigger = _attach_analog_trigger(self)
+
         # Long-waveform players; empty unless the bitstream was built with the PL DDR4.
         from .ddr4_player import attach as _attach_ddr4_players
 

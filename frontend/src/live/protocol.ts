@@ -9,6 +9,25 @@ export interface LiveSettings {
   max_hold: boolean;
   fps: number;
   running: boolean;
+  trigger: TriggerMode;
+}
+
+/** "free": snapshots at any time. "analog": each record starts at an analog trigger. */
+export type TriggerMode = "free" | "analog";
+export type AnalogTriggerType = "envelope" | "rising" | "falling";
+
+/** Settings and status of the analog trigger (GET/POST /adc/trigger, and in every frame). */
+export interface AnalogTriggerInfo {
+  enabled: boolean;
+  adc: AdcInput;
+  mode: AnalogTriggerType;
+  threshold: number;
+  off_threshold: number;
+  release_s: number;
+  active: boolean;
+  peak: number;
+  peak_dbfs: number;
+  events: number;
 }
 
 export interface LiveInfo {
@@ -19,6 +38,7 @@ export interface LiveInfo {
   inputs: AdcInput[];
   nfft_choices: number[];
   max_fps: number;
+  trigger_modes: TriggerMode[];
   settings: LiveSettings;
 }
 
@@ -39,6 +59,9 @@ export interface LiveFrame {
   clipping: boolean;
   trace: number[];
   trace_dt_s: number;
+  /** null: free running; true: starts at a trigger; false: no trigger came, taken anyway */
+  triggered: boolean | null;
+  trigger: AnalogTriggerInfo | null;
   capture_ms: number;
 }
 

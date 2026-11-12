@@ -95,6 +95,23 @@ class HardwareService:
         with self._adc_lock:
             return capture.capture(adc, samples)
 
+    @property
+    def analog_trigger(self):
+        """Analog trigger of the overlay, or None when the bitstream has no ADC path."""
+        return getattr(self.controller, "analog_trigger", None)
+
+    def capture_adc_triggered(self, adc: str, samples: int, auto_timeout: float = 0.05):
+        """Capture on the analog trigger, or after ``auto_timeout`` without one."""
+        capture = self.adc
+        if capture is None:
+            raise RuntimeError("this bitstream has no ADC capture (build with RFSOC_AWG_ADC=1)")
+        with self._adc_lock:
+            return capture.capture_triggered(adc, samples, trigger="analog", auto_timeout=auto_timeout)
+
+    def analog_trigger_info(self) -> Optional[dict]:
+        trigger = self.analog_trigger
+        return None if trigger is None else trigger.info()
+
     def dacs_status(self) -> dict:
         return {channel: self.dac_status(channel) for channel in DAC_CHANNELS}
 

@@ -23,7 +23,7 @@ FULL_SCALE = 32768.0             # ADC samples are 14 bit, MSB-aligned in int16
 #: Board connector label -> capture input. From the tile/block order used by other RFSoC 4x2
 #: firmware (tile 0: D, C; tile 2: B, A). Confirm once with a cable.
 ADC_INPUTS = {"D": 0, "C": 1, "B": 2, "A": 3}
-TRIGGER_SOURCES = {"software": 0, "external": 1, "dac0": 2, "dac2": 3}
+TRIGGER_SOURCES = {"software": 0, "external": 1, "dac0": 2, "dac2": 3, "analog": 4}
 
 CTRL_ARM = 1 << 0
 CTRL_SW_TRIGGER = 1 << 1
@@ -69,7 +69,8 @@ class AdcCapture:
         ``adc``: connector label "A".."D" or input index 0..3.
         ``samples``: rounded up to a multiple of 16; default is the whole memory.
         ``trigger``: "software" (call ``trigger()``), "external" (PMOD0 pin 0), "dac0" or "dac2"
-        (start of that DAC's sequence playback). ``trigger()`` works in every mode.
+        (start of that DAC's sequence playback), or "analog" (the analog trigger, see
+        analog_trigger.py). ``trigger()`` works in every mode.
         ``delay_s``: time to skip between the trigger and the first sample, in steps of 3.26 ns.
         """
         index = ADC_INPUTS[adc.upper()] if isinstance(adc, str) else int(adc)
@@ -115,6 +116,21 @@ class AdcCapture:
         self.arm(adc, samples)
         self.trigger()
         return self.read()
+
+    def capture_triggered(self, adc="A", samples=None, trigger="analog", auto_timeout=0.05):
+        """Capture on a trigger, like an oscilloscope in "auto" mode.
+
+        Waits up to ``auto_timeout`` seconds for the trigger; if none comes, captures anyway.
+        Returns ``(samples, triggered)``.
+        """
+        self.arm(adc, samples, trigger=trigger)
+        try:
+            self._wait(STATUS_DONE, auto_timeout, "for a trigger")
+            triggered = True
+        except CaptureError:
+            self.trigger()
+            triggered = False
+        return self.read(), triggered
 
     def status(self) -> dict:
         raw = int(self._status_channel.read())

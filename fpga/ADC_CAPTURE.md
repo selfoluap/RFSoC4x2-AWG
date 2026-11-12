@@ -1,7 +1,7 @@
-# ADC capture and spectrum
+# ADC capture, spectrum, live view and analog trigger
 
-Records one of the four ADC inputs into on-chip memory on a trigger, and turns a capture into a
-spectrum in Python.
+Records one of the four ADC inputs into on-chip memory on a trigger, turns a capture into a
+spectrum in Python, shows both live in the web app, and can trigger on the ADC signal itself.
 
 **Status: logic verified on a register-transfer model, not yet simulated in an HDL simulator,
 not yet built in Vivado, not yet run on a board.**
@@ -14,7 +14,7 @@ not yet built in Vivado, not yet run on a board.**
 | Sample rate | 4915.2 MS/s, 14-bit: exactly half the DAC rate, same reference |
 | Frequency range | DC to 2457.6 MHz; higher frequencies fold back (a tone at f shows at 4915.2 MHz - f) |
 | Record length | up to 262,144 samples = 53.3 us (16 UltraRAM) |
-| Trigger | software, PMOD0 pin 0, or the start of DAC0 / DAC2 sequence playback |
+| Trigger | software, PMOD0 pin 0, the start of DAC0 / DAC2 sequence playback, or the analog trigger |
 | Trigger delay | 0 to about 14 s in steps of 3.26 ns, to place the window anywhere in a long sequence |
 | Spectrum | computed in Python from a capture: Hann window, averaged, in dBFS; 75 kHz bins at 65,536 points |
 
@@ -45,6 +45,51 @@ window = adc.read(timeout=10)
 
 `spectrum(samples, nfft=4096)` averages more segments for a smoother trace with coarser bins.
 
+## Analog trigger
+
+A detector on one ADC input that raises a trigger when a signal appears, as an alternative to
+the digital PMOD pin.
+
+| Type | Fires when | Use |
+| --- | --- | --- |
+| `envelope` | any \|sample\| reaches the threshold | an RF burst of any carrier frequency |
+| `rising` | a sample rises to the threshold (signed) | a positive edge or pulse |
+| `falling` | a sample falls to the threshold (signed) | a negative edge or pulse |
+
+| Property | Value |
+| --- | --- |
+| Time resolution | one 16-sample word, 3.26 ns |
+| Detection delay | fixed: 3 clock cycles (9.8 ns) inside the FPGA, plus the ADC's own delay (to be measured) |
+| Hysteresis | separate "off" threshold; default half the threshold in envelope mode |
+| Release time | 0 to 213 us; bridges the zero crossings of a slow carrier (default 26 ns) |
+| Readings | active, event count, and the input's peak level for choosing a threshold |
+
+What it triggers:
+
+- **Capture:** `ol.adc.arm("A", trigger="analog")`.
+- **DAC players:** the players' trigger input becomes "PMOD pin OR analog trigger", so a player
+  armed with `external_trigger=True` starts on either. The analog trigger is silent unless it
+  is enabled.
+- **Live view:** "On signal" in the web panel starts every record at the trigger, so the time
+  trace stands still (to within one word, 3.26 ns); without a signal it falls back to
+  untriggered after 50 ms, like an oscilloscope's auto mode.
+
+```python
+trig = ol.analog_trigger                      # None when the bitstream has no ADC path
+print(trig.status()["peak"])                  # with the signal applied: pick about half of this
+trig.configure("B", threshold=4000)           # RF burst on ADC B
+ol.seq["dac0"].arm(repeats=168, external_trigger=True)   # the burst on ADC B starts playback
+```
+
+The ADC inputs are AC-coupled, so a slow level change (a photodiode's DC level) does not reach
+the detector; an RF burst or a fast edge does.
+
+State: 8 logic tests on the detector model, 5 driver tests running the detector and capture
+models together, 2 live-view tests. The Verilog (`src/rtl/AnalogTrigger.v`, testbench
+`../hdl/tb_AnalogTrigger.v`) is not compiled or simulated; expected last line of the testbench:
+`PASS: analog trigger tests, no errors`. Compile it together with the capture block:
+`iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v fpga/src/rtl/AnalogTrigger.v`.
+
 ## Live view in the web app
 
 The web app has a "Live view" panel: a spectrum and a time trace of one ADC input that update
@@ -71,8 +116,8 @@ How it works (stage 1, software only, no FPGA change):
 - Each frame is a snapshot of at most 53 us, so the ADC is watched for well under 1 % of the
   time: good for continuous or repeating signals, rare events are usually missed. Averaging and
   max hold in the FPGA (stage 2) would raise that.
-- The time trace is not triggered on the signal, so it does not stand still. The analog
-  trigger will fix that.
+- In "Free run" the time trace does not stand still. "On signal" uses the analog trigger
+  for that and draws the threshold on the trace.
 
 Deploying it: rebuild the frontend (`npm run build`), re-run `scripts/deploy_frontend.sh`, and
 re-run `scripts/install_frontend_nginx.sh` once, because the nginx site now forwards WebSocket
@@ -124,9 +169,12 @@ stalled, and gaps in the stream's valid signal lose no samples.
 
 1. Simulate:
    ```bash
-   iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v && vvp tb_adc
+   iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v \
+       fpga/src/rtl/AnalogTrigger.v && vvp tb_adc
+   iverilog -g2012 -o tb_atrig hdl/tb_AnalogTrigger.v fpga/src/rtl/AnalogTrigger.v && vvp tb_atrig
    ```
-   Expected last line: `PASS: capture tests, no errors`.
+   Expected last lines: `PASS: capture tests, no errors` and
+   `PASS: analog trigger tests, no errors`.
 2. Build: `RFSOC_AWG_SEQ=1 RFSOC_AWG_ADC=1 ./build_all.sh` (the ADC path needs the sequencer).
 
 Points to check on the first run:

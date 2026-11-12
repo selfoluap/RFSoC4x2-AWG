@@ -105,12 +105,12 @@ def test_gaps_in_the_stream_lose_no_word():
     assert words == list(range(words[0], words[0] + 300))
 
 
-@pytest.mark.parametrize("source,field", [(1, "ext_trigger"), (2, "dac0_status"), (3, "dac2_status")])
+@pytest.mark.parametrize("source,field", [(1, "ext_trigger"), (2, "dac0_status"), (3, "dac2_status"), (4, "analog_trig")])
 def test_trigger_sources_are_only_honoured_when_selected(source, field):
     for selected in (0, source):
         bench = Bench()
         bench.arm(3, 8, source=selected)
-        setattr(bench.dut.inp, field, 2 if field != "ext_trigger" else 1)
+        setattr(bench.dut.inp, field, 2 if field.endswith("status") else 1)
         bench.step(60)
         assert bench.dut.status["done"] == int(selected == source)
         assert bench.dut.status["armed"] == int(selected != source)

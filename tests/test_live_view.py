@@ -217,3 +217,34 @@ def test_session_reports_capture_failure_and_pauses():
     errors = [m for m in socket.sent if m["type"] == "error"]
     assert errors and "capture failed" in errors[0]["message"]
     assert not view.running
+
+
+# ---------------------------------------------------------------------------- analog trigger mode
+def test_analog_trigger_mode_uses_the_triggered_capture_and_reports_it():
+    adc = FakeAdc()
+    outcomes = [True, True, False]
+
+    def triggered(name, samples):
+        return adc(name, samples), outcomes.pop(0)
+
+    info = {"enabled": True, "adc": "A", "mode": "envelope", "threshold": 4000}
+    view = LiveView(adc, capture_triggered=triggered, trigger_info=lambda: info)
+    assert view.info()["trigger_modes"] == ["free", "analog"]
+    free = view.frame()
+    assert free["triggered"] is None and free["trigger"] == info
+    view.update(trigger="analog")
+    assert view.settings()["trigger"] == "analog"
+    assert [view.frame()["triggered"] for _ in range(3)] == [True, True, False]
+    json.dumps(view.frame.__self__.settings())
+    view.update(trigger="free")
+    assert view.frame()["triggered"] is None
+
+
+def test_analog_trigger_mode_needs_the_hardware():
+    view = LiveView(FakeAdc())
+    assert view.info()["trigger_modes"] == ["free"]
+    with pytest.raises(ValueError, match="no analog trigger"):
+        view.update(trigger="analog")
+    with pytest.raises(ValueError):
+        view.update(trigger="edge")
+    assert view.settings()["trigger"] == "free" and view.frame()["trigger"] is None

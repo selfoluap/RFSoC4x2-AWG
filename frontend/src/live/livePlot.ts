@@ -224,6 +224,25 @@ export function drawTrace(
   ctx.fillText("ADC counts, time in ns", area.x0 + 6, area.y0 + 4);
   frameBox(area, colors);
 
+  // trigger thresholds, when the trigger watches the displayed input
+  const trigger = frame?.trigger;
+  if (frame && trigger && trigger.enabled && trigger.adc === frame.adc) {
+    const levels = trigger.mode === "envelope" ? [trigger.threshold, -trigger.threshold] : [trigger.threshold];
+    ctx.strokeStyle = colors.marker;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    for (const level of levels) {
+      if (Math.abs(level) <= scale) {
+        const y = Math.round(toY(level)) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(area.x0, y);
+        ctx.lineTo(area.x0 + area.width, y);
+        ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
+  }
+
   if (samples.length > 1) {
     ctx.strokeStyle = colors.trace;
     ctx.lineWidth = 1.5;

@@ -100,6 +100,30 @@ proc add_adc_capture {} {
   connect_bd_net [get_bd_pins hier_dac_play/seq_status]  [get_bd_pins adc_capture_0/dac0_status]
   connect_bd_net [get_bd_pins hier_dac2_play/seq_status] [get_bd_pins adc_capture_0/dac2_status]
 
+  # The analog trigger (inside ADCCapture) also starts the DAC players: their trigger input
+  # becomes "PMOD pin OR analog trigger". The analog trigger is silent unless it is enabled.
+  set trig_or [create_bd_cell -type ip -vlnv xilinx.com:ip:util_vector_logic:2.0 trigger_or]
+  set_property -dict [list CONFIG.C_OPERATION {or} CONFIG.C_SIZE {1}] $trig_or
+  set pin_net [get_bd_nets -of_objects [awg_ext_trigger_port]]
+  set player_pins [list [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]]
+  disconnect_bd_net $pin_net $player_pins
+  connect_bd_net [awg_ext_trigger_port] [get_bd_pins trigger_or/Op1]
+  connect_bd_net [get_bd_pins adc_capture_0/analog_trig] [get_bd_pins trigger_or/Op2]
+  connect_bd_net [get_bd_pins trigger_or/Res] \
+    [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]
+
+  # analog trigger registers: ctl = control (out) / status (in), cfg = thresholds / release
+  set tctl [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_adc_trig_ctl]
+  set_property -dict [list CONFIG.C_IS_DUAL {1} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_GPIO_WIDTH {32} \
+    CONFIG.C_ALL_INPUTS_2 {1} CONFIG.C_GPIO2_WIDTH {32}] $tctl
+  set tcfg [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_adc_trig_cfg]
+  set_property -dict [list CONFIG.C_IS_DUAL {1} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_GPIO_WIDTH {32} \
+    CONFIG.C_ALL_OUTPUTS_2 {1} CONFIG.C_GPIO2_WIDTH {32}] $tcfg
+  connect_bd_net [get_bd_pins axi_gpio_adc_trig_ctl/gpio_io_o]  [get_bd_pins adc_capture_0/trig_ctrl]
+  connect_bd_net [get_bd_pins adc_capture_0/trig_status]        [get_bd_pins axi_gpio_adc_trig_ctl/gpio2_io_i]
+  connect_bd_net [get_bd_pins axi_gpio_adc_trig_cfg/gpio_io_o]  [get_bd_pins adc_capture_0/trig_thr]
+  connect_bd_net [get_bd_pins axi_gpio_adc_trig_cfg/gpio2_io_o] [get_bd_pins adc_capture_0/trig_release]
+
   # ------------------------------------------------------------------ control and status GPIOs
   # ctl: channel 1 = control word (out), channel 2 = status word (in)
   set ctl [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_adc_ctl]
@@ -113,7 +137,7 @@ proc add_adc_capture {} {
   connect_bd_net [get_bd_pins adc_capture_0/status]        [get_bd_pins axi_gpio_adc_ctl/gpio2_io_i]
   connect_bd_net [get_bd_pins axi_gpio_adc_cfg/gpio_io_o]  [get_bd_pins adc_capture_0/delay]
   connect_bd_net [get_bd_pins axi_gpio_adc_cfg/gpio2_io_o] [get_bd_pins adc_capture_0/nrows]
-  awg_add_control_slaves {axi_gpio_adc_ctl axi_gpio_adc_cfg}
+  awg_add_control_slaves {axi_gpio_adc_ctl axi_gpio_adc_cfg axi_gpio_adc_trig_ctl axi_gpio_adc_trig_cfg}
 
   # ------------------------------------------------------------------ processor access to the memory
   set ic [get_bd_cells internalRAM_interconnect]

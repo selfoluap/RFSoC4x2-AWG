@@ -141,7 +141,10 @@ proc add_ddr4_player {} {
   connect_bd_intf_net [get_bd_intf_pins hier_dac2_play/M_AXI_DDR4] [get_bd_intf_pins ddr4_smc/S02_AXI]
   connect_bd_net -net ddr4_ui_clk  [get_bd_pins hier_dac_play/ddr4_ui_clk]  [get_bd_pins hier_dac2_play/ddr4_ui_clk]
   connect_bd_net -net ddr4_aresetn [get_bd_pins hier_dac_play/ddr4_aresetn] [get_bd_pins hier_dac2_play/ddr4_aresetn]
-  connect_bd_net [awg_ext_trigger_port] [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]
+  # the sequencer or the ADC add-on may already drive the players' trigger pins
+  if {[llength [get_bd_nets -quiet -of_objects [get_bd_pins hier_dac_play/ext_trigger]]] == 0} {
+    connect_bd_net [awg_ext_trigger_port] [get_bd_pins hier_dac_play/ext_trigger] [get_bd_pins hier_dac2_play/ext_trigger]
+  }
 
   # four more AXI-Lite slaves on the next free ports of the control interconnect
   awg_add_control_slaves {axi_gpio_ddr0_ctl axi_gpio_ddr0_cfg axi_gpio_ddr2_ctl axi_gpio_ddr2_cfg}

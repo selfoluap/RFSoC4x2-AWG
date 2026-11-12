@@ -1,3 +1,4 @@
+import type { AdcInput, AnalogTriggerInfo, AnalogTriggerType } from "./live/protocol";
 import type {
   ConstantsResponse,
   DacChannel,
@@ -55,5 +56,10 @@ export const api = {
     request<DacControlResponse>(`/dac/${channel}/enable`, { method: "POST" }),
   disableDac: (channel: DacChannel) =>
     request<DacControlResponse>(`/dac/${channel}/disable`, { method: "POST" }),
-  disableAllDacs: () => request<{ success: boolean }>("/dac/all/disable", { method: "POST" })
+  disableAllDacs: () => request<{ success: boolean }>("/dac/all/disable", { method: "POST" }),
+  setAnalogTrigger: (payload: { adc: AdcInput; mode: AnalogTriggerType; threshold: number; enabled: boolean }) =>
+    request<AnalogTriggerInfo & { available: boolean }>("/adc/trigger", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    })
 };

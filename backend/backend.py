@@ -36,6 +36,15 @@ class SimpleWaveformParams(BaseModel):
     duty_cycle: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class AnalogTriggerParams(BaseModel):
+    adc: Literal["A", "B", "C", "D"] = "A"
+    mode: Literal["envelope", "rising", "falling"] = "envelope"
+    threshold: int = 2000
+    off_threshold: int | None = None
+    release_ns: float | None = None
+    enabled: bool = True
+
+
 class FFTResponse(BaseModel):
     frequencies: List[float]
     magnitudes: List[float]
@@ -273,14 +282,43 @@ def get_adc_info(hardware: HardwareService = Depends(get_hardware_service)):
     return {"available": True, **LiveView(hardware.capture_adc, capacity=capture.capacity).info()}
 
 
+@app.get("/adc/trigger", response_model=dict[str, Any])
+def get_analog_trigger(hardware: HardwareService = Depends(get_hardware_service)):
+    """Settings and status (active, peak, events) of the analog trigger."""
+    info = hardware.analog_trigger_info()
+    return {"available": False} if info is None else {"available": True, **info}
+
+
+@app.post("/adc/trigger", response_model=dict[str, Any])
+def set_analog_trigger(
+    params: AnalogTriggerParams,
+    hardware: HardwareService = Depends(get_hardware_service),
+):
+    trigger = hardware.analog_trigger
+    if trigger is None:
+        raise HTTPException(status_code=400, detail="This bitstream has no analog trigger")
+    try:
+        trigger.configure(
+            params.adc,
+            threshold=params.threshold,
+            mode=params.mode,
+            off_threshold=params.off_threshold,
+            release_s=None if params.release_ns is None else params.release_ns * 1e-9,
+            enable=params.enabled,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"available": True, **trigger.info()}
+
+
 @app.websocket("/adc/live")
 async def adc_live(websocket: WebSocket):
     """Live ADC spectrum and time trace.
 
     The server sends one "info" message, then "frame" messages while running. The browser may
     send settings at any time: {"adc": "A".."D", "nfft": 1024..65536, "averaging": 1..256,
-    "max_hold": bool, "reset_hold": true, "fps": 0.5..30, "running": bool}. Captures only run
-    while a browser is connected.
+    "max_hold": bool, "reset_hold": true, "fps": 0.5..30, "running": bool,
+    "trigger": "free" | "analog"}. Captures only run while a browser is connected.
     """
     await websocket.accept()
     capture = hardware_service.adc
@@ -291,7 +329,13 @@ async def adc_live(websocket: WebSocket):
         })
         await websocket.close()
         return
-    view = LiveView(hardware_service.capture_adc, capacity=capture.capacity)
+    has_trigger = hardware_service.analog_trigger is not None
+    view = LiveView(
+        hardware_service.capture_adc,
+        capacity=capture.capacity,
+        capture_triggered=hardware_service.capture_adc_triggered if has_trigger else None,
+        trigger_info=hardware_service.analog_trigger_info if has_trigger else None,
+    )
     await run_live_session(view, websocket.receive_json, websocket.send_json)
     try:
         await websocket.close()

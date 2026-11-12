@@ -3,7 +3,8 @@
 //
 // Self-checking testbench for ADCCapture.
 //
-//   iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v && vvp tb_adc
+//   iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v \
+//            fpga/src/rtl/AnalogTrigger.v && vvp tb_adc
 //
 // Stream s carries the word {s, n} for its n-th valid word, with random gaps. Every word written
 // to the memory port must come from the selected stream and continue the count without a skip.
@@ -54,7 +55,8 @@ module tb_ADCCapture;
     .s2_axis_tdata (td[2]), .s2_axis_tvalid (tv[2]), .s2_axis_tready (),
     .s3_axis_tdata (td[3]), .s3_axis_tvalid (tv[3]), .s3_axis_tready (),
     .ctrl (ctrl), .delay (delay), .nrows (nrows), .ext_trigger (ext_trigger),
-    .dac0_status (dac0_status), .dac2_status (dac2_status), .status (status)
+    .dac0_status (dac0_status), .dac2_status (dac2_status), .status (status),
+    .trig_ctrl (32'd0), .trig_thr (32'd0), .trig_release (32'd0), .trig_status (), .analog_trig ()
   );
 
   // ------------------------------------------------------------ memory port checker

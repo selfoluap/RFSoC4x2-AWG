@@ -20,6 +20,7 @@ class Inputs:
     ext_trigger: int = 0
     dac0_status: int = 0
     dac2_status: int = 0
+    analog_trig: int = 0     # `active` output of the AnalogTrigger inside ADCCapture
     tdata: list = field(default_factory=lambda: [0, 0, 0, 0])
     tvalid: list = field(default_factory=lambda: [0, 0, 0, 0])
 
@@ -30,7 +31,7 @@ class AdcCaptureModel:
         self.inp = Inputs()
         self.d_r = self.v_r = 0
         self.arm_1 = self.arm_2 = self.swt_1 = self.swt_2 = self.swt_3 = 0
-        self.ext_1 = self.ext_2 = self.ext_3 = self.d0_1 = self.d2_1 = 0
+        self.ext_1 = self.ext_2 = self.ext_3 = self.d0_1 = self.d2_1 = self.at_1 = 0
         self.state = C_IDLE
         self.delay_left = self.rows_left = self.wr_row = 0
         self.mem_we = self.mem_addr = self.mem_wdata = 0
@@ -58,6 +59,7 @@ class AdcCaptureModel:
             or (src == 1 and self.ext_2 and not self.ext_3)
             or (src == 2 and (i.dac0_status >> 1 & 1) and not self.d0_1)
             or (src == 3 and (i.dac2_status >> 1 & 1) and not self.d2_1)
+            or (src == 4 and i.analog_trig and not self.at_1)
         )
         rows_cfg = self.ROWS if (i.nrows == 0 or i.nrows > self.ROWS) else i.nrows
         arm_2 = self.arm_2
@@ -69,6 +71,7 @@ class AdcCaptureModel:
         self.swt_1, self.swt_2, self.swt_3 = i.ctrl >> 1 & 1, self.swt_1, self.swt_2
         self.ext_1, self.ext_2, self.ext_3 = i.ext_trigger, self.ext_1, self.ext_2
         self.d0_1, self.d2_1 = i.dac0_status >> 1 & 1, i.dac2_status >> 1 & 1
+        self.at_1 = i.analog_trig
         self.mem_we = 0
 
         if not aresetn or not arm_2:
