@@ -108,3 +108,9 @@ reduced input rate. It is off by default and has not been built or tested on har
 Building with `RFSOC_AWG_SEQ=1` replaces the looping player by one that plays stored blocks with
 repeat counts on a trigger (for example a 4 ms Doppler staircase) and doubles the waveform
 memory. Off by default, not yet built or tested on hardware. See [SEQUENCER.md](SEQUENCER.md).
+
+## Optional: ADC capture and spectrum
+
+Building with `RFSOC_AWG_SEQ=1 RFSOC_AWG_ADC=1` enables the four ADCs and adds a triggered
+capture memory (262,144 samples at 4915.2 MS/s) with a Python spectrum function. Off by default,
+not yet built or tested on hardware. See [ADC_CAPTURE.md](ADC_CAPTURE.md).

@@ -19,6 +19,18 @@ proc create_project_from_sources {} {
 
     add_files -fileset sources_1 $::cfg(rtl_files)
     add_files -fileset constrs_1 $::cfg(xdc_file)
+    if {$::cfg(enable_adc) && !$::cfg(enable_seq)} {
+        error "RFSOC_AWG_ADC=1 needs RFSOC_AWG_SEQ=1 (the capture can be triggered by playback start)"
+    }
+    if {$::cfg(enable_adc)} {
+        foreach rtl_file $::cfg(adc_rtl_files) {
+            require_file "ADC capture RTL source" $rtl_file
+        }
+        require_file "ADC capture XDC constraints" $::cfg(adc_xdc_file)
+        require_file "ADC capture block design Tcl" $::cfg(adc_bd_tcl_file)
+        add_files -fileset sources_1 $::cfg(adc_rtl_files)
+        add_files -fileset constrs_1 $::cfg(adc_xdc_file)
+    }
     if {$::cfg(enable_seq) || $::cfg(enable_ddr4)} {
         require_file "external trigger XDC constraints" $::cfg(trigger_xdc_file)
         require_file "sequencer block design Tcl" $::cfg(seq_bd_tcl_file)
@@ -53,6 +65,10 @@ proc create_project_from_sources {} {
     }
     if {$::cfg(enable_seq)} {
         add_sequencer
+    }
+    if {$::cfg(enable_adc)} {
+        source $::cfg(adc_bd_tcl_file)
+        add_adc_capture
     }
     if {$::cfg(enable_ddr4)} {
         source $::cfg(ddr4_bd_tcl_file)

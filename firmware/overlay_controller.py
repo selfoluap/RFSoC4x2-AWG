@@ -149,6 +149,11 @@ class OverlayController(Overlay):
 
         self.seq = _attach_seq_players(self)
 
+        # ADC capture; None unless the bitstream was built with the ADC path.
+        from .adc_capture import attach as _attach_adc_capture
+
+        self.adc = _attach_adc_capture(self)
+
         # Long-waveform players; empty unless the bitstream was built with the PL DDR4.
         from .ddr4_player import attach as _attach_ddr4_players
 

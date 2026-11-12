@@ -40,6 +40,13 @@ set ::cfg(seq_rtl_files) [list [file join $::cfg(repo_root) src rtl DACSeqStream
 set ::cfg(seq_xdc_file) [file join $::cfg(repo_root) src constraints sequencer.xdc]
 set ::cfg(seq_bd_tcl_file) [file join $::cfg(repo_root) src bd add_sequencer.tcl]
 set ::cfg(trigger_xdc_file) [file join $::cfg(repo_root) src constraints ext_trigger.xdc]
+
+# Optional ADC capture path: build with RFSOC_AWG_ADC=1 (needs RFSOC_AWG_SEQ=1).
+# Off by default. See ADC_CAPTURE.md.
+set ::cfg(enable_adc) [expr {[info exists ::env(RFSOC_AWG_ADC)] && $::env(RFSOC_AWG_ADC) eq "1"}]
+set ::cfg(adc_rtl_files) [list [file join $::cfg(repo_root) src rtl ADCCapture.v]]
+set ::cfg(adc_xdc_file) [file join $::cfg(repo_root) src constraints adc_capture.xdc]
+set ::cfg(adc_bd_tcl_file) [file join $::cfg(repo_root) src bd add_adc_capture.tcl]
 set ::cfg(ddr4_bd_tcl_file) [file join $::cfg(repo_root) src bd add_ddr4_player.tcl]
 
 proc require_vivado_version {} {

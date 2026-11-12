@@ -1,0 +1,113 @@
+# ADC capture and spectrum
+
+Records one of the four ADC inputs into on-chip memory on a trigger, and turns a capture into a
+spectrum in Python.
+
+**Status: logic verified on a register-transfer model, not yet simulated in an HDL simulator,
+not yet built in Vivado, not yet run on a board.**
+
+## What you get
+
+| Property | Value |
+| --- | --- |
+| Inputs | ADC A to D, one recorded at a time (selected per capture) |
+| Sample rate | 4915.2 MS/s, 14-bit: exactly half the DAC rate, same reference |
+| Frequency range | DC to 2457.6 MHz; higher frequencies fold back (a tone at f shows at 4915.2 MHz - f) |
+| Record length | up to 262,144 samples = 53.3 us (16 UltraRAM) |
+| Trigger | software, PMOD0 pin 0, or the start of DAC0 / DAC2 sequence playback |
+| Trigger delay | 0 to about 14 s in steps of 3.26 ns, to place the window anywhere in a long sequence |
+| Spectrum | computed in Python from a capture: Hann window, averaged, in dBFS; 75 kHz bins at 65,536 points |
+
+The ADC inputs of the RFSoC 4x2 are coupled through on-board baluns, so they show RF, not DC or
+slow levels. Check the low-frequency cutoff in the board manual.
+
+With a cable from a DAC output to an ADC input this gives a self-test of the players without a
+scope: trigger the capture on playback start, set the delay, and look at any 53 us window of
+the output up to 2.46 GHz.
+
+## Use
+
+```python
+from firmware import OverlayController
+from firmware.adc_capture import spectrum
+
+ol = OverlayController("rfsocawg_adc.bit")
+adc = ol.adc                                  # None when the bitstream has no ADC path
+
+samples = adc.capture("A")                    # 262,144 samples now, as int16
+freqs, level_dbfs = spectrum(samples)         # averaged spectrum, 0 dBFS = full-scale sine
+
+# 53 us window, 2 ms into a Doppler staircase on DAC0, started by the same trigger
+adc.arm("A", trigger="dac0", delay_s=2e-3)
+ol.seq["dac0"].arm(repeats=168, external_trigger=True)
+window = adc.read(timeout=10)
+```
+
+`spectrum(samples, nfft=4096)` averages more segments for a smoother trace with coarser bins.
+
+## How it works
+
+```
+RFDC ADC stream (8 samples, 614.4 MHz) -> 16 samples per word -> 307.2 MHz --+
+                                                    (one chain per ADC)      +-> input select
+                                                                             -> ADCCapture -> memory -> PS
+```
+
+After the trigger, `ADCCapture` skips `delay` words and writes the next `nrows` words to the
+memory. The processor reads them through the memory's other port. The ADC streams are never
+stalled, and gaps in the stream's valid signal lose no samples.
+
+## Files
+
+| File | Purpose |
+| --- | --- |
+| `src/rtl/ADCCapture.v` | input select, trigger, delay, recorder |
+| `src/bd/add_adc_capture.tcl` | enables the ADCs, adds stream chains, memory and GPIOs |
+| `src/constraints/adc_capture.xdc` | CDC constraints |
+| `../hdl/tb_ADCCapture.v` | self-checking Verilog testbench |
+| `../hdl/model/adc_capture_model.py` | register-transfer model |
+| `../firmware/adc_capture.py` | driver (`ol.adc`) and `spectrum()` |
+| `../tests/test_adc_capture*.py` | tests |
+
+## What is verified
+
+| Item | State |
+| --- | --- |
+| Capture logic: input select, record length, delay, all trigger sources, stream gaps, re-arm | 20 tests pass on the Python model |
+| Driver, run against that model; spectrum frequency, level in dBFS, averaging, aliasing | 14 tests pass |
+| Verilog source, block design script, constraints | **not compiled, simulated or built** |
+| Hardware | **not tested** |
+
+## Bring-up
+
+1. Simulate:
+   ```bash
+   iverilog -g2012 -o tb_adc hdl/tb_ADCCapture.v fpga/src/rtl/ADCCapture.v && vvp tb_adc
+   ```
+   Expected last line: `PASS: capture tests, no errors`.
+2. Build: `RFSOC_AWG_SEQ=1 RFSOC_AWG_ADC=1 ./build_all.sh` (the ADC path needs the sequencer).
+
+Points to check on the first run:
+
+- **ADC settings in the converter IP.** Tiles and clocking follow the board's base overlay. The
+  data-path values (real, no decimation, mixer bypassed, 8 samples per word) are my reading of
+  the IP parameters: confirm them in the IP dialog, and that the stream is 128 bit at 614.4 MHz.
+- **ADC reference clocks.** The script adds `adc0_clk` and `adc2_clk` inputs at 491.52 MHz, as
+  the base overlay has them; the existing clock setup in `OverlayController` already programs
+  that frequency.
+- **Input labels.** `ADC_INPUTS` maps connector labels A to D onto the four streams from other
+  RFSoC 4x2 firmware. Confirm with a cable and swap entries if needed.
+- **Sample order.** A captured sine should be smooth; a sawtooth pattern every 8 or 16 samples
+  means the word packing is reversed somewhere.
+- **Timing at 614.4 MHz** for the four width converters.
+- **Alignment to playback.** The ADC tiles are not in the multi-tile sync, so the delay between
+  DAC output and capture is fixed within a power cycle but can change by a few samples between
+  power cycles.
+
+## Limits of this first version
+
+- One input per capture; no simultaneous multi-channel recording.
+- 53 us at full rate. Longer windows need decimation or recording into the DDR4.
+- The spectrum is computed on the processor, a few updates per second at best; no live FFT in
+  the FPGA, and not yet in the web app.
+- No pre-trigger samples.
