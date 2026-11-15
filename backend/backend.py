@@ -273,6 +273,23 @@ def get_constants(hardware: HardwareService = Depends(get_hardware_service)):
     }
 
 
+@app.get("/device/info", response_model=dict[str, Any])
+def get_device_info(hardware: HardwareService = Depends(get_hardware_service)):
+    """What the loaded bitstream offers: playback modes, trigger input, ADC path, capacities."""
+    return hardware.device.info()
+
+
+@app.get("/device/status", response_model=dict[str, Any])
+def get_device_status(hardware: HardwareService = Depends(get_hardware_service)):
+    """State of both outputs, whoever set them up (a script through gRPC, or this web page)."""
+    return hardware.device.status()
+
+
+@app.post("/device/stop_all", response_model=dict[str, Any])
+def stop_all_outputs(hardware: HardwareService = Depends(get_hardware_service)):
+    return hardware.device.stop_all()
+
+
 @app.get("/adc/info", response_model=dict[str, Any])
 def get_adc_info(hardware: HardwareService = Depends(get_hardware_service)):
     """Whether this bitstream has the ADC capture path, and what the live view offers."""

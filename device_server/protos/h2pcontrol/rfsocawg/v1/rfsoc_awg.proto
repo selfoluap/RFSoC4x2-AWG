@@ -1,0 +1,183 @@
+// RFSoC 4x2 AWG device service.
+//
+// One service per board. Every DAC output is operated the same way, whatever plays behind it:
+//
+//   LoadLoop | LoadSequence | LoadWaveform  ->  Arm  ->  (Trigger)  ->  Stop
+//
+// Samples are little-endian int16 (two bytes per sample), full scale +/-32767, played at
+// 9830.4 MS/s unless a LoadWaveform header asks for interpolation.
+//
+// Errors: INVALID_ARGUMENT for a bad request, FAILED_PRECONDITION when the device cannot do it
+// in its current state or with the loaded bitstream (GetInfo says what the bitstream offers).
+
+syntax = "proto3";
+
+package h2pcontrol.rfsocawg.v1;
+
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_DAC0 = 1;
+  CHANNEL_DAC2 = 2;
+}
+
+enum PlaybackMode {
+  PLAYBACK_MODE_UNSPECIFIED = 0;  // nothing loaded
+  PLAYBACK_MODE_LOOP = 1;         // one waveform, repeating until stopped
+  PLAYBACK_MODE_SEQUENCE = 2;     // equal blocks, each played `repeats` times in turn
+  PLAYBACK_MODE_LONG = 3;         // long waveform from the PL DDR4
+}
+
+enum OutputState {
+  OUTPUT_STATE_UNSPECIFIED = 0;
+  OUTPUT_STATE_IDLE = 1;
+  OUTPUT_STATE_ARMED = 2;         // waiting for a trigger
+  OUTPUT_STATE_RUNNING = 3;
+  OUTPUT_STATE_HOLDING = 4;       // sequence finished, last block repeating
+  OUTPUT_STATE_DONE = 5;
+}
+
+enum TriggerSource {
+  TRIGGER_SOURCE_UNSPECIFIED = 0; // treated as SOFTWARE
+  TRIGGER_SOURCE_IMMEDIATE = 1;   // start as part of Arm
+  TRIGGER_SOURCE_SOFTWARE = 2;    // start on the Trigger call
+  TRIGGER_SOURCE_EXTERNAL = 3;    // start on the trigger input (TTL pin); Trigger also works
+}
+
+enum EndMode {
+  END_MODE_UNSPECIFIED = 0;       // treated as STOP
+  END_MODE_STOP = 1;              // output returns to mid-scale
+  END_MODE_HOLD = 2;              // keep repeating the last block (sequence mode only)
+  END_MODE_LOOP = 3;              // start again from the beginning
+}
+
+message Capabilities {
+  bool loop = 1;
+  bool sequence = 2;
+  bool long = 3;
+  bool external_trigger = 4;
+  bool adc = 5;
+  bool analog_trigger = 6;
+}
+
+message ChannelInfo {
+  Channel channel = 1;
+  uint64 loop_samples = 2;        // longest loop waveform
+  uint64 sequence_samples = 3;    // total samples of all blocks; 0 without sequence mode
+  uint64 long_bytes = 4;          // DDR4 share of this channel; 0 without the DDR4 player
+}
+
+message OutputStatus {
+  Channel channel = 1;
+  PlaybackMode mode = 2;
+  OutputState state = 3;
+  uint32 block = 4;               // current block in sequence mode
+  uint64 loaded_samples = 5;
+  repeated string warnings = 6;   // e.g. the output had gaps; empty when all is well
+  // Long mode: lowest fill of the DDR4 read buffer during playback, out of 4096. Near 4096:
+  // the DDR4 keeps up easily. Near 0: it does not. Unset when not measured.
+  optional uint32 buffer_low_water = 7;
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  double dac_sample_rate_hz = 1;
+  Capabilities capabilities = 2;
+  repeated ChannelInfo channels = 3;
+  string bitfile = 4;
+  string clock_source = 5;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  repeated OutputStatus outputs = 1;
+}
+
+message LoadLoopRequest {
+  Channel channel = 1;
+  bytes samples = 2;              // zero-padded by the device to a multiple of 32 samples
+}
+
+message LoadLoopResponse {
+  OutputStatus output = 1;
+}
+
+message LoadSequenceRequest {
+  Channel channel = 1;
+  uint32 block_samples = 2;       // samples per block, a multiple of 32
+  bytes samples = 3;              // all blocks one after the other
+}
+
+message LoadSequenceResponse {
+  OutputStatus output = 1;
+}
+
+// Sent first in a LoadWaveform stream.
+message LongWaveformHeader {
+  Channel channel = 1;
+  oneof rate {
+    // Full DAC rate, samples stored with this many bits (14, 12 or 8). One channel at a time.
+    uint32 sample_bits = 2;
+    // DAC input rate divided by this factor (2, 4, 8 or 16); bandwidth shrinks accordingly.
+    uint32 interpolation = 3;
+  }
+}
+
+// LoadWaveform is a client stream: one header, then the samples in chunks of any size that is
+// a whole number of samples (1 MiB works well and stays under gRPC's default message limit).
+message LoadWaveformRequest {
+  oneof part {
+    LongWaveformHeader header = 1;
+    bytes samples = 2;
+  }
+}
+
+message LoadWaveformResponse {
+  OutputStatus output = 1;
+}
+
+message ArmRequest {
+  Channel channel = 1;
+  TriggerSource trigger = 2;
+  uint64 repeats = 3;             // per block (sequence) or passes (long); 0 is treated as 1
+  EndMode end = 4;
+}
+
+message ArmResponse {
+  OutputStatus output = 1;
+}
+
+message TriggerRequest {
+  Channel channel = 1;
+}
+
+message TriggerResponse {
+  OutputStatus output = 1;
+}
+
+message StopRequest {
+  Channel channel = 1;
+}
+
+message StopResponse {
+  OutputStatus output = 1;
+}
+
+message StopAllRequest {}
+
+message StopAllResponse {
+  repeated OutputStatus outputs = 1;
+}
+
+service RfsocAwgService {
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc LoadLoop(LoadLoopRequest) returns (LoadLoopResponse);
+  rpc LoadSequence(LoadSequenceRequest) returns (LoadSequenceResponse);
+  rpc LoadWaveform(stream LoadWaveformRequest) returns (LoadWaveformResponse);
+  rpc Arm(ArmRequest) returns (ArmResponse);
+  rpc Trigger(TriggerRequest) returns (TriggerResponse);
+  rpc Stop(StopRequest) returns (StopResponse);
+  rpc StopAll(StopAllRequest) returns (StopAllResponse);
+}

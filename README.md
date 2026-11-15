@@ -63,6 +63,13 @@ curl http://127.0.0.1:8080/api/status
 
 Open the frontend at `http://<rfsoc-board-ip>:8080/`.
 
+## Device Server
+
+The board can run as a network device for an experiment control system (h2pcontrol or any gRPC
+client): scripts load waveforms and arm the outputs, a timing master's TTL starts them, and the
+web page shows the state. See [device_server/README.md](device_server/README.md). The gRPC
+layer has not been run yet.
+
 ## Repository Structure
 
 ```

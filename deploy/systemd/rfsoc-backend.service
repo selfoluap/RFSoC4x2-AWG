@@ -1,12 +1,12 @@
 [Unit]
-Description=RFSoC AWG Backend
+Description=RFSoC AWG device server (gRPC on 50051) and web backend (127.0.0.1:8001)
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/xilinx/RFSoC4x2-AWG
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/bin/bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && uvicorn backend.backend:app --host 127.0.0.1 --port 8001'
+ExecStart=/bin/bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && python3 -m device_server --host 0.0.0.0 --grpc-port 50051'
 Restart=on-failure
 RestartSec=5
 

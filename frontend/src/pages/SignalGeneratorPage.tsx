@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { api } from "../api";
-import { LiveAdcPanel } from "../components/LiveAdcPanel";
 import { WaveformPlots } from "../components/WaveformPlots";
 import { useAppState } from "../context/AppStateContext";
 import { computeExpectedSpectrum, generateSerrodynePreview, generateSimplePreview } from "../dsp";
@@ -125,6 +124,14 @@ export function SignalGeneratorPage() {
   return (
     <>
       <section className="panel section-panel">
+        <div className="section-heading">
+          <p className="prompt-line">Bench test</p>
+          <h2>Test waveform</h2>
+          <p className="meta-note">
+            A quick looping waveform for checking an output by hand. Loading one replaces whatever a script had
+            loaded on that channel.
+          </p>
+        </div>
         <div className="mode-toggle" role="tablist" aria-label="Waveform type">
           {waveformTabs.map((tab) => (
             <button
@@ -265,8 +272,8 @@ export function SignalGeneratorPage() {
 
       <section className="panel section-panel">
         <div className="section-heading">
-          <p className="prompt-line">DAC output</p>
-          <h2>Output enable</h2>
+          <p className="prompt-line">Bench test</p>
+          <h2>Test output enable</h2>
         </div>
         <div className="dac-output-grid">
           {DAC_CHANNELS.map((channel) => {
@@ -302,8 +309,6 @@ export function SignalGeneratorPage() {
         frequencies={spectrum.frequencies}
         magnitudes={spectrum.magnitudes}
       />
-
-      <LiveAdcPanel />
     </>
   );
 }

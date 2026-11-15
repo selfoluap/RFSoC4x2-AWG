@@ -33,3 +33,6 @@ xsim.dir/
 
 # Python bytecode at any depth
 __pycache__/
+
+# generated gRPC stubs (scripts/gen_protos.sh)
+device_server/gen/

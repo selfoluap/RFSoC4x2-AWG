@@ -1,42 +1,43 @@
-import os
 import threading
 from typing import Optional
 
 import numpy as np
 
-from firmware import OverlayController
+from firmware.device import DeviceCore, device_is_loaded, get_device
 
 DAC_AMP = int(np.iinfo(np.int16).max)
-DEFAULT_BITFILE = os.environ.get("RFSOC_BITFILE")
 DAC_CHANNELS = ("dac0", "dac2")
 
 
 class HardwareService:
-    """Shared hardware service wrapper around OverlayController."""
+    """What the web backend needs from the board.
 
-    def __init__(self, bitfile: Optional[str] = DEFAULT_BITFILE):
-        self._bitfile = bitfile
-        self._controller: Optional[OverlayController] = None
+    Everything goes through the process-wide device core (firmware/device.py), so the web
+    page, the gRPC device server and anything else in this process see one state.
+    """
+
+    def __init__(self, device: Optional[DeviceCore] = None):
+        self._device = device                 # tests pass one in; on the board it is created lazily
         self.last_signal: Optional[np.ndarray] = None
         # one capture memory, shared by the live view and any other capture
         self._adc_lock = threading.Lock()
 
     def initialize(self) -> None:
-        if self._controller is None:
-            if self._bitfile:
-                self._controller = OverlayController(bitfile=self._bitfile)
-            else:
-                self._controller = OverlayController()
+        _ = self.device
 
     @property
     def initialized(self) -> bool:
-        return self._controller is not None
+        return self._device is not None or device_is_loaded()
 
     @property
-    def controller(self) -> OverlayController:
-        self.initialize()
-        assert self._controller is not None
-        return self._controller
+    def device(self) -> DeviceCore:
+        if self._device is None:
+            self._device = get_device()
+        return self._device
+
+    @property
+    def controller(self):
+        return self.device.controller
 
     def info(self) -> dict:
         return self.controller.info()
@@ -56,32 +57,30 @@ class HardwareService:
     def x_axis(self) -> np.ndarray:
         return np.arange(self.buf_len, dtype=float) / self.dac_sr
 
-    def _dac_player(self, channel: str):
-        player = getattr(self.controller, channel, None)
-        if channel not in DAC_CHANNELS or player is None:
-            raise ValueError(f"Unsupported DAC channel: {channel}")
-        return player
-
+    # ------------------------------------------------------------------ bench test (loop mode)
     def load_dac(self, signal: np.ndarray, channel: str = "dac0") -> None:
-        player = self._dac_player(channel)
+        """Load a looping test waveform; the output stays off until enabled."""
         data = np.round(np.clip(np.asarray(signal, dtype=float), -DAC_AMP, DAC_AMP)).astype(np.int16)
-        player.load_waveform(data)
+        self.device.load_loop(channel, data)
         self.last_signal = data
 
     def set_dac_enabled(self, channel: str, enabled: bool) -> None:
-        player = self._dac_player(channel)
         if enabled:
-            player.enable()
+            self.device.arm(channel, trigger="immediate")
         else:
-            player.disable()
+            self.device.stop(channel)
 
     def dac_status(self, channel: str) -> dict:
-        player = self._dac_player(channel)
+        status = next(o for o in self.device.status()["outputs"] if o["channel"] == channel)
         return {
-            "enabled": player.is_enabled(),
-            "waveform_length": player.waveform_length,
+            "enabled": status["state"] in ("running", "holding"),
+            "waveform_length": status["loaded_samples"],
         }
 
+    def dacs_status(self) -> dict:
+        return {channel: self.dac_status(channel) for channel in DAC_CHANNELS}
+
+    # ------------------------------------------------------------------ ADC
     @property
     def adc(self):
         """ADC capture of the overlay, or None when the bitstream has no ADC path."""
@@ -111,9 +110,6 @@ class HardwareService:
     def analog_trigger_info(self) -> Optional[dict]:
         trigger = self.analog_trigger
         return None if trigger is None else trigger.info()
-
-    def dacs_status(self) -> dict:
-        return {channel: self.dac_status(channel) for channel in DAC_CHANNELS}
 
 
 hardware_service = HardwareService()

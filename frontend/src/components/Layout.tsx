@@ -3,7 +3,7 @@ import { api } from "../api";
 import { useAppState } from "../context/AppStateContext";
 
 const navItems = [
-  { to: "/signal-generator", label: "Signal generator", index: "01" },
+  { to: "/device", label: "Device status", index: "01" },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
